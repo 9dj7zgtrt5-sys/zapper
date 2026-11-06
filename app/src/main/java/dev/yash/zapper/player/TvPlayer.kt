@@ -29,6 +29,9 @@ class TvPlayer(private val ctx: Context, view: PlayerView, private val cb: Callb
     ).build()
 
     private var url: String? = null
+    private var resolver: (() -> String?)? = null
+    private var generation = 0
+    private val bg = java.util.concurrent.Executors.newSingleThreadExecutor()
     private var ua: String = ""
     private var live = true
     private var forceHls = false
@@ -75,8 +78,15 @@ class TvPlayer(private val ctx: Context, view: PlayerView, private val cb: Callb
         handler.postDelayed({ start(pos) }, 1500L * retries)
     }
 
-    fun play(url: String, userAgent: String, live: Boolean, startPositionMs: Long = 0) {
+    /**
+     * @param resolver optional: fetches a fresh stream URL (on a background thread) before every
+     *        (re)connect, for portals whose links expire.
+     */
+    fun play(url: String, userAgent: String, live: Boolean, startPositionMs: Long = 0, resolver: (() -> String?)? = null) {
         handler.removeCallbacksAndMessages(null)
+        generation++
+        this.resolver = resolver
+        if (resolver != null) exo.stop()
         this.url = url
         this.ua = userAgent
         this.live = live
@@ -87,7 +97,23 @@ class TvPlayer(private val ctx: Context, view: PlayerView, private val cb: Callb
     }
 
     private fun start(positionMs: Long) {
-        val u = url ?: return
+        val r = resolver
+        if (r == null) { startWith(url ?: return, positionMs); return }
+        val gen = ++generation
+        bg.execute {
+            val resolved = try { r() } catch (_: Exception) { null }
+            handler.post {
+                if (gen != generation) return@post
+                if (resolved == null) retry("no link") else {
+                    url = resolved
+                    if (!forceHls) forceHls = resolved.substringBefore('?').endsWith(".m3u8", ignoreCase = true)
+                    startWith(resolved, positionMs)
+                }
+            }
+        }
+    }
+
+    private fun startWith(u: String, positionMs: Long) {
         val http = DefaultHttpDataSource.Factory()
             .setUserAgent(ua)
             .setAllowCrossProtocolRedirects(true)
@@ -105,11 +131,12 @@ class TvPlayer(private val ctx: Context, view: PlayerView, private val cb: Callb
 
     /** Re-starts the current stream (e.g. after returning from background). */
     fun resume() {
-        if (url != null) start(if (live) 0 else exo.currentPosition)
+        if (url != null || resolver != null) start(if (live) 0 else exo.currentPosition)
     }
 
     fun stop() {
         handler.removeCallbacksAndMessages(null)
+        generation++
         exo.stop()
     }
 
@@ -127,6 +154,8 @@ class TvPlayer(private val ctx: Context, view: PlayerView, private val cb: Callb
 
     fun release() {
         handler.removeCallbacksAndMessages(null)
+        generation++
+        bg.shutdown()
         exo.release()
     }
 

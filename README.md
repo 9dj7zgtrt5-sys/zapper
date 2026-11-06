@@ -7,6 +7,7 @@ A lightweight Android TV app for M3U playlists with XMLTV guide data. It is buil
 - **Opens automatically** when the Fire TV boots or wakes from sleep. This can be turned off in settings.
 - **VPN guard.** Zapper waits for the VPN to connect before playing. If the VPN drops, playback pauses and a full-screen card says "The VPN is off — press OK to open it". Playback resumes by itself once the VPN reconnects.
 - **Phone settings page** at `http://<tv-ip>:8090`, available whenever Zapper is open. From it you can change the playlist and EPG links, **hide categories** your parents don't need, hide movies and series, choose the VPN app, and see status (channel count, guide coverage, VPN state).
+- **MAC-based portals (MAG / Stalker)**: enter the portal URL and the activated MAC address. Zapper signs in like a MAG250 box, loads channels and categories, uses the portal's own TV guide, and gets a fresh stream link each time a channel opens.
 - Live playback (Media3/ExoPlayer) for HLS and MPEG-TS, with automatic reconnects.
 - Categories, a ★ Favorites list, and channel numbers. Numbers only cover visible channels, so they stay small.
 - TV guide grid. Past programmes can be replayed when the provider supports catch-up (`default`, `append`, `shift`, `flussonic`, `xc`).

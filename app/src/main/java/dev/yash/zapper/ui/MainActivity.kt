@@ -154,6 +154,15 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         if (started) needsResume = true
         started = true
         main.post(vpnWatch)
+        main.postDelayed(keepAlive, 120_000)
+    }
+
+    /** Portal sessions time out unless the "box" checks in now and then. */
+    private val keepAlive = object : Runnable {
+        override fun run() {
+            if (Repo.isPortal) Repo.linkExec.execute { Repo.keepAlive() }
+            main.postDelayed(this, 120_000)
+        }
     }
 
     override fun onResume() {
@@ -170,6 +179,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
     override fun onStop() {
         super.onStop()
         main.removeCallbacks(vpnWatch)
+        main.removeCallbacks(keepAlive)
         player.stop()
     }
 
@@ -187,7 +197,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
 
     /** Moves the app towards "playing TV" as far as current conditions allow. */
     private fun proceed() {
-        if (Repo.m3uUrl.isBlank()) { showWelcome(); return }
+        if (!Repo.isConfigured) { showWelcome(); return }
         if (cardKind == Card.WELCOME) hideCard()
         if (vpnBlocked || loading) return
         when {
@@ -220,7 +230,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
     private fun vpnOk(): Boolean = !Repo.requireVpn || Vpn.isActive(this) || Vpn.apps(this).isEmpty()
 
     private fun checkVpn() {
-        if (Repo.m3uUrl.isBlank()) return
+        if (!Repo.isConfigured) return
         val now = System.currentTimeMillis()
         if (vpnOk()) {
             if (vpnBlocked) {
@@ -326,7 +336,8 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         needsResume = false
         channelAdapter.playingUrl = ch.url
         if (vpnBlocked) return
-        player.play(ch.url, ch.userAgent ?: Repo.userAgent, live = true)
+        val resolver: (() -> String?)? = if (ch.cmd != null) ({ Repo.resolveStream(ch) }) else null
+        player.play(ch.url, ch.userAgent ?: Repo.userAgent, live = true, resolver = resolver)
         Repo.lastChannelUrl = ch.url
         Repo.lastGroup = groups.getOrNull(groupIndex)?.title
         showInfo()

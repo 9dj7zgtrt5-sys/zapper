@@ -24,7 +24,13 @@
                 android:textSize="30sp"
                 android:textStyle="bold" />
 
-            <TextView style="@style/Label" android:text="M3U playlist URL" />
+            <TextView style="@style/Label" android:text="Portal URL (for MAC-based providers)" />
+            <EditText android:id="@+id/portalUrl" style="@style/Field" android:inputType="textUri" />
+
+            <TextView style="@style/Label" android:text="MAC address (e.g. 00:1A:79:12:34:56)" />
+            <EditText android:id="@+id/macAddress" style="@style/Field" android:inputType="textCapCharacters" />
+
+            <TextView style="@style/Label" android:text="Or: M3U playlist URL" />
             <EditText android:id="@+id/m3uUrl" style="@style/Field" android:inputType="textUri" />
 
             <TextView style="@style/Label" android:text="XMLTV EPG URL (optional, uses playlist's if blank)" />

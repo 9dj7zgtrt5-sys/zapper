@@ -35,6 +35,13 @@ object Repo {
 
     // ---- settings ----
     val m3uUrl: String get() = prefs.getString("m3u", "")!!
+    /** "m3u" or "portal" */
+    val source: String get() = prefs.getString("source", "m3u")!!
+    val isPortal: Boolean get() = source == "portal"
+    val portalUrl: String get() = prefs.getString("portal", "")!!
+    val mac: String get() = prefs.getString("mac", "")!!
+    val isConfigured: Boolean
+        get() = if (isPortal) portalUrl.isNotBlank() && mac.isNotBlank() else m3uUrl.isNotBlank()
     val epgUrl: String get() = prefs.getString("epg", "")!!
     val userAgent: String get() = prefs.getString("ua", "")!!.ifBlank { DEFAULT_UA }
     val customUserAgent: String get() = prefs.getString("ua", "")!!
@@ -56,6 +63,9 @@ object Repo {
         set(v) { prefs.edit().putBoolean("helpshown", v).apply() }
 
     class Settings(
+        val source: String = Repo.source,
+        val portal: String = portalUrl,
+        val mac: String = Repo.mac,
         val m3u: String = m3uUrl,
         val epg: String = epgUrl,
         val ua: String = customUserAgent,
@@ -71,8 +81,13 @@ object Repo {
 
     @Synchronized
     fun saveConfig(s: Settings) {
-        val sourceChanged = s.m3u.trim() != m3uUrl || s.epg.trim() != epgUrl || s.ua.trim() != customUserAgent
+        val mac = StalkerClient.normalizeMac(s.mac)
+        val sourceChanged = s.m3u.trim() != m3uUrl || s.epg.trim() != epgUrl || s.ua.trim() != customUserAgent ||
+            s.source != source || s.portal.trim() != portalUrl || mac != this.mac
         val e = prefs.edit()
+            .putString("source", s.source)
+            .putString("portal", s.portal.trim())
+            .putString("mac", mac)
             .putString("m3u", s.m3u.trim())
             .putString("epg", s.epg.trim())
             .putString("ua", s.ua.trim())
@@ -165,6 +180,8 @@ object Repo {
 
     /** @return error message or null */
     fun loadPlaylist(force: Boolean): String? {
+        if (isPortal) return loadPortal()
+        stalker = null
         val url = m3uUrl
         if (url.isBlank()) return "No playlist URL set"
         return try {
@@ -179,7 +196,50 @@ object Repo {
         }
     }
 
+    // ---- Stalker portal ----
+    @Volatile private var stalker: StalkerClient? = null
+    @Volatile var subscriptionEnd: String? = null; private set
+    /** Separate thread for stream links so they never wait behind a long guide download. */
+    val linkExec = Executors.newSingleThreadExecutor()
+
+    private fun loadPortal(): String? {
+        if (portalUrl.isBlank() || mac.isBlank()) return "Portal URL or MAC address missing"
+        return try {
+            val c = StalkerClient(portalUrl, mac)
+            val list = c.channels()
+            stalker = c
+            channels = list
+            playlistEpgUrls = emptyList()
+            subscriptionEnd = try { c.subscriptionEnd() } catch (_: Exception) { null }
+            if (list.isEmpty()) "The portal sent no channels. Check the MAC address is the one your provider activated." else null
+        } catch (e: StalkerClient.AuthException) {
+            "The portal didn't accept MAC $mac (${e.message}). Check it matches what your provider activated."
+        } catch (e: Exception) {
+            "Couldn't connect to the portal: ${e.message ?: e.javaClass.simpleName}"
+        }
+    }
+
+    /** Stream URL to play for a channel (asks the portal for a fresh link if needed). Background thread only. */
+    fun resolveStream(ch: Channel): String? {
+        val cmd = ch.cmd ?: return ch.url
+        val c = stalker ?: return null
+        return try { c.createLink(cmd) } catch (_: Exception) { null }
+    }
+
+    fun keepAlive() {
+        try { stalker?.keepAlive() } catch (_: Exception) {}
+    }
+
     fun loadEpg(force: Boolean): String? {
+        val portal = stalker
+        if (isPortal && portal != null && epgUrl.isBlank()) {
+            return try {
+                epg = portal.epg(36)
+                if (epg.isEmpty()) "The portal has no TV guide" else null
+            } catch (e: Exception) {
+                "EPG failed: ${e.message ?: e.javaClass.simpleName}"
+            }
+        }
         val urls = epgUrl.split(',', ' ', '\n').map { it.trim() }.filter { it.isNotEmpty() }
             .ifEmpty { playlistEpgUrls }
         if (urls.isEmpty()) return null

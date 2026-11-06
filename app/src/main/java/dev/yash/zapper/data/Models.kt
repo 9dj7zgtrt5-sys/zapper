@@ -11,6 +11,8 @@ class Channel(
     val catchup: CatchupInfo?,
     val isVod: Boolean,
     val userAgent: String?,
+    /** Stalker portal command; when set, a fresh stream link is requested at play time. */
+    val cmd: String? = null,
 ) {
     /** 1-based number within the full live list (0 for VOD). */
     var number: Int = 0

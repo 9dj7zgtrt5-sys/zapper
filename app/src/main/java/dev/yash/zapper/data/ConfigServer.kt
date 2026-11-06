@@ -96,6 +96,9 @@ object ConfigServer {
         } else Repo.hiddenGroups
         Repo.saveConfig(
             Repo.Settings(
+                source = if (v("source") == "portal") "portal" else "m3u",
+                portal = v("portal") ?: "",
+                mac = v("mac") ?: "",
                 m3u = v("m3u") ?: "",
                 epg = v("epg") ?: "",
                 ua = v("ua") ?: "",
@@ -156,13 +159,24 @@ object ConfigServer {
             <div class="status">
               <div>Channels: <b>${Repo.channels.count { !it.isVod }}</b> live · <b>${Repo.channels.count { it.isVod }}</b> movies/episodes</div>
               <div>TV guide: <b>${Repo.epgChannelCount}</b> channels have programme info</div>
+              <div>Source: <b>${if (Repo.isPortal) "Portal (MAC ${esc(Repo.mac)})" else "M3U playlist"}</b>${Repo.subscriptionEnd?.let { " · subscription until <b>" + esc(it) + "</b>" } ?: ""}</div>
               <div>VPN: <b>${if (vpnOn) "connected ✓" else if (vpnApps.isEmpty()) "no VPN app found" else "off"}</b></div>
             </div>
             <form method="post" action="/save">
-              <h3>Sources</h3>
-              <label>M3U playlist URL</label>
-              <textarea name="m3u" rows="3" required>${esc(Repo.m3uUrl)}</textarea>
-              <label>XMLTV EPG URL <small>(optional — blank uses the playlist's own; separate several with commas)</small></label>
+              <h3>Channels source</h3>
+              <label class="row"><input type="radio" name="source" value="portal" onchange="src()" ${checked(Repo.isPortal)}> Portal + MAC address <small>(MAG / Stalker)</small></label>
+              <label class="row"><input type="radio" name="source" value="m3u" onchange="src()" ${checked(!Repo.isPortal)}> M3U playlist link</label>
+              <div id="portalBox">
+                <label>Portal URL <small>(e.g. http://example.com:8080/c/)</small></label>
+                <input name="portal" value="${esc(Repo.portalUrl)}" placeholder="http://server:port/c/" autocapitalize="off" autocorrect="off">
+                <label>MAC address <small>(the one your provider activated, e.g. 00:1A:79:12:34:56)</small></label>
+                <input name="mac" value="${esc(Repo.mac)}" placeholder="00:1A:79:XX:XX:XX" autocapitalize="characters" autocorrect="off">
+              </div>
+              <div id="m3uBox">
+                <label>M3U playlist URL</label>
+                <textarea name="m3u" rows="3">${esc(Repo.m3uUrl)}</textarea>
+              </div>
+              <label>XMLTV EPG URL <small>(optional — leave blank to use the portal's or playlist's own guide)</small></label>
               <textarea name="epg" rows="2">${esc(Repo.epgUrl)}</textarea>
 
               <h3>Startup &amp; VPN</h3>
@@ -188,7 +202,8 @@ object ConfigServer {
                 <button type="submit" name="reload" value="1" class="secondary">Save &amp; reload channels</button>
               </div>
             </form>
-            <script>function setAll(v){document.querySelectorAll("input[name=g]").forEach(function(c){c.checked=v})}</script>
+            <script>function src(){var p=document.querySelector("input[name=source][value=portal]").checked;document.getElementById("portalBox").style.display=p?"":"none";document.getElementById("m3uBox").style.display=p?"none":""}src();
+            function setAll(v){document.querySelectorAll("input[name=g]").forEach(function(c){c.checked=v})}</script>
             """.trimIndent()
         )
     }
@@ -200,6 +215,7 @@ object ConfigServer {
         h2{margin:0 0 12px}h3{margin:28px 0 4px;color:#8ab4f8;font-size:15px;text-transform:uppercase;letter-spacing:.05em}
         label{display:block;margin:14px 0 6px;font-weight:600}small,.muted{color:#9aa0a6;font-weight:400}
         textarea,input,select{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #3c4043;background:#1b1f24;color:#e8eaed;font-size:15px}
+        input[type=radio]{width:auto}
         .row{display:flex;gap:10px;align-items:center;font-weight:400;margin:10px 0}.row input{width:auto;transform:scale(1.3)}
         .status{background:#1b1f24;border-radius:10px;padding:12px 14px;line-height:1.7}
         .groups{max-height:50vh;overflow:auto;border:1px solid #3c4043;border-radius:8px;padding:2px 12px}
