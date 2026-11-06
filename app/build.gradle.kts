@@ -13,15 +13,25 @@ android {
         // Kept at 28: Fire OS is Android 7-11 based, and this keeps auto-launch on wake working
         // without the extra background restrictions newer targets bring.
         targetSdk = 28
-        versionCode = 6
-        versionName = "1.5"
+        versionCode = 7
+        versionName = "1.6"
+    }
+
+    // One fixed key for every build, so new versions install over old ones (Android rejects
+    // updates signed with a different key). Personal sideloaded app, so the key lives in the repo.
+    signingConfigs {
+        create("zapper") {
+            storeFile = file("zapper.jks")
+            storePassword = "59YFHdpcOljoZ8rLTkV5d1cu"
+            keyAlias = "zapper"
+            keyPassword = "59YFHdpcOljoZ8rLTkV5d1cu"
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            // Signed with the debug key so it can be sideloaded without setting up a keystore.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("zapper")
         }
     }
 
