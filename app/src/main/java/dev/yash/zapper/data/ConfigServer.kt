@@ -72,11 +72,11 @@ object ConfigServer {
             } else ""
 
             val html = if (method == "POST" && path.startsWith("/test")) {
-                val lines = if (Repo.isPortal && Repo.portalUrl.isNotBlank()) Repo.newStalker().diagnose()
+                val lines = if (Repo.isPortal && Repo.portalUrl.isNotBlank()) Repo.newStalker().let { c -> c.diagnose().also { Repo.rememberStalker(c) } }
                 else listOf("Choose \"Portal + MAC address\" and save a portal URL first.")
                 page(
                     "<h2>Portal connection test</h2><pre>" + lines.joinToString("\n") { esc(it) } + "</pre>" +
-                        "<p class='muted'>Send a screenshot of this page if it fails.</p><p><a href='/'>Back to settings</a></p>"
+                        "<p class='muted'>Send a screenshot of this page if it fails. Please don't run the test many times in a row: providers block connections that try to sign in too often.</p><p><a href='/'>Back to settings</a></p>"
                 )
             } else if (method == "POST" && path.startsWith("/save")) {
                 val form = parseForm(body)

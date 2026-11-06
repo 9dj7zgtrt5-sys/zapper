@@ -21,8 +21,16 @@ class StalkerClient(
     deviceIdOverride: String = "",
     deviceId2Override: String = "",
     signatureOverride: String = "",
+    /** "apiUrl|model" that worked last time; tried first so we don't probe the portal again. */
+    private val remembered: String = "",
 ) {
-    class AuthException(msg: String) : IOException(msg)
+    open class AuthException(msg: String) : IOException(msg)
+
+    /** The portal has temporarily banned this connection; stop all attempts immediately. */
+    class BlockedException(msg: String) : AuthException(msg)
+
+    /** "apiUrl|model" after a successful sign-in, for the caller to save. */
+    val workingProfile: String? get() = api?.let { "$it|${variant.model}" }
 
     /** How the client identifies itself; tried in order until the portal accepts one. */
     private class Variant(val model: String, val ua: String, val xua: String, val encodeCookie: Boolean, val randomToken: Boolean)
@@ -101,6 +109,8 @@ class StalkerClient(
             val body = (if (code in 200..299) c.inputStream else c.errorStream)
                 ?.bufferedReader()?.use { it.readText() } ?: ""
             log?.add("${v.model}  $action  →  HTTP $code   ${apiUrl.substringAfter("://").substringAfter('/')}   ${snippet(body)}")
+            if (Regex("(?i)you (have been|are) blocked|ip (is )?(banned|blocked)|too many (requests|attempts)").containsMatchIn(body) || code == 429)
+                throw BlockedException(snippet(body).ifEmpty { "Too many attempts" })
             if (code == 401 || code == 403) throw AuthException("HTTP $code at $action" + snippet(body).let { if (it.isNotEmpty()) " — $it" else "" })
             if (code !in 200..299) throw IOException("Portal error (HTTP $code at $action)")
             if (body.contains("Authorization failed", ignoreCase = true)) throw AuthException("Authorization failed at $action")
@@ -116,45 +126,62 @@ class StalkerClient(
         }
     }
 
-    /** Handshake + profile. Tries the usual API paths and box identities until one is accepted. */
+    /** One sign-in attempt (handshake + profile) with a given path and box identity. */
+    private fun signIn(a: String, v: Variant) {
+        variant = v
+        token = null
+        api = null
+        val tok = if (v.randomToken) hash("MD5", "$mac${System.nanoTime()}").take(32) else ""
+        val hs = get(a, "type=stb&action=handshake&token=$tok&prehash=0")
+        val t = hs.optJSONObject("js")?.optString("token").orEmpty().ifEmpty { tok }
+        if (t.isEmpty()) throw IOException("Portal did not return a session")
+        token = t
+        api = a
+        val profile = get(
+            a,
+            "type=stb&action=get_profile&hd=1&ver=ImageDescription%3A%200.2.18-r23-250&num_banks=2" +
+                "&sn=$sn&stb_type=${v.model}&image_version=218&video_out=hdmi&device_id=$deviceId" +
+                "&device_id2=$deviceId2&signature=$signature&auth_second_step=1&hw_version=1.7-BD-00" +
+                "&not_valid_token=0&api_signature=262&prehash=",
+        )
+        val block = profile.optJSONObject("js")?.optString("block_msg").orEmpty()
+        if (block.isNotBlank()) { api = null; throw AuthException(block) }
+    }
+
+    private fun isNotFound(e: Exception) = (e.message ?: "").contains("HTTP 404") ||
+        e is java.net.UnknownHostException || e is java.net.ConnectException
+
+    /**
+     * Signs in, gently: reuses what worked before, otherwise finds the API path with one identity and
+     * only tries other box identities on that path. Stops at once if the portal says we're blocked.
+     */
     @Synchronized
     fun connect() {
+        // 1. Same session details as last time (normal case: a single request pair).
+        val known = api?.let { it to variant } ?: remembered.split('|').takeIf { it.size == 2 }?.let { (u, m) ->
+            variants.firstOrNull { it.model == m }?.let { u to it }
+        }
         var lastErr: Exception? = null
-        var best: Exception? = null
-        val apis = api?.let { listOf(it) } ?: candidates()
-        val vs = if (api != null) listOf(variant) else variants
-        for (a in apis) {
-            for (v in vs) {
-                try {
-                    variant = v
-                    token = null
-                    val tok = if (v.randomToken) hash("MD5", "$mac${System.nanoTime()}").take(32) else ""
-                    val hs = get(a, "type=stb&action=handshake&token=$tok&prehash=0")
-                    val t = hs.optJSONObject("js")?.optString("token").orEmpty().ifEmpty { tok }
-                    if (t.isEmpty()) throw IOException("Portal did not return a session")
-                    token = t
-                    api = a
-                    val profile = get(
-                        a,
-                        "type=stb&action=get_profile&hd=1&ver=ImageDescription%3A%200.2.18-r23-250&num_banks=2" +
-                            "&sn=$sn&stb_type=${v.model}&image_version=218&video_out=hdmi&device_id=$deviceId" +
-                            "&device_id2=$deviceId2&signature=$signature&auth_second_step=1&hw_version=1.7-BD-00" +
-                            "&not_valid_token=0&api_signature=262&prehash=",
-                    )
-                    val js = profile.optJSONObject("js")
-                    val block = js?.optString("block_msg").orEmpty()
-                    if (block.isNotBlank()) throw AuthException(block)
-                    return
-                } catch (e: Exception) {
-                    lastErr = e
-                    // Prefer reporting a refusal from a path that exists over a "not found" from a wrong path.
-                    if (e is AuthException || best == null) best = e
-                    api = null
-                }
+        if (known != null) {
+            try { signIn(known.first, known.second); return } catch (e: BlockedException) { throw e } catch (e: Exception) { lastErr = e }
+        }
+        // 2. Find the API path using the first identity; skip paths that don't exist.
+        var found: String? = null
+        for (a in candidates()) {
+            try { signIn(a, variants[0]); return } catch (e: BlockedException) { throw e } catch (e: Exception) {
+                lastErr = e
+                if (!isNotFound(e)) { found = a; break }
+            }
+        }
+        // 3. The portal lives at `found` but refused: try the other identities there only, slowly.
+        if (found != null) {
+            for (v in variants.drop(1)) {
+                Thread.sleep(1500)
+                try { signIn(found, v); return } catch (e: BlockedException) { throw e } catch (e: Exception) { lastErr = e }
             }
         }
         api = null
-        throw best ?: lastErr ?: IOException("Portal not reachable")
+        throw lastErr ?: IOException("Portal not reachable")
     }
 
     /** Step-by-step connection test for the phone settings page. */

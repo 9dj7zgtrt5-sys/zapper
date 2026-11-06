@@ -287,7 +287,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         if (Repo.channels.isEmpty()) {
             showCard(
                 Card.ERROR, "Couldn't load the channels",
-                (err ?: "The playlist is empty.") + "\n\nCheck the internet connection, then press OK to try again.",
+                (err ?: "The playlist is empty.").let { if (it.contains("press OK")) it else it + "\n\nCheck the internet connection, then press OK to try again." },
                 button = "Try again",
             ) { hideCard(); loadedConfig = -1; proceed() }
             return

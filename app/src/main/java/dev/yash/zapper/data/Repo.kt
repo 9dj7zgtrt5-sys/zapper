@@ -47,7 +47,17 @@ object Repo {
     val stbDeviceId2: String get() = prefs.getString("stb_dev2", "")!!
     val stbSignature: String get() = prefs.getString("stb_sig", "")!!
 
-    fun newStalker() = StalkerClient(portalUrl, mac, stbSn, stbDeviceId, stbDeviceId2, stbSignature)
+    private val profileKey get() = "stb_profile|$portalUrl|$mac"
+
+    fun newStalker() = StalkerClient(
+        portalUrl, mac, stbSn, stbDeviceId, stbDeviceId2, stbSignature,
+        remembered = prefs.getString(profileKey, "")!!,
+    )
+
+    /** Remembers which API path / box type the portal accepted, so later launches don't probe. */
+    fun rememberStalker(c: StalkerClient) {
+        c.workingProfile?.let { prefs.edit().putString(profileKey, it).apply() }
+    }
     /** MAC used with the portal: the one entered in settings, else this TV's own generated MAC. */
     val mac: String get() = prefs.getString("mac", "")!!.ifBlank { deviceMac }
     val isConfigured: Boolean
@@ -254,10 +264,14 @@ object Repo {
             val c = newStalker()
             val list = c.channels()
             stalker = c
+            rememberStalker(c)
             channels = list
             playlistEpgUrls = emptyList()
             subscriptionEnd = try { c.subscriptionEnd() } catch (_: Exception) { null }
             if (list.isEmpty()) "The portal sent no channels. Check the MAC address is the one your provider activated." else null
+        } catch (e: StalkerClient.BlockedException) {
+            "Your provider has temporarily blocked this internet connection (${e.message}).\n\n" +
+                "Restart your Wi-Fi router (unplug it for 30 seconds), or wait about 30 minutes,\nthen press OK."
         } catch (e: StalkerClient.AuthException) {
             "The portal refused MAC $mac (${e.message}).\nIf your provider needs a VPN, turn it on. Otherwise check the MAC matches what they activated."
         } catch (e: Exception) {
