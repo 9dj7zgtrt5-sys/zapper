@@ -9,6 +9,7 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.AdapterView
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -90,7 +91,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         setContentView(R.layout.activity_main)
         Fonts.apply(window.decorView)
         findViewById<TextView>(R.id.listHint).text = Display.hints(
-            "OK" to "Watch", "Hold OK" to "Favorite", "◀" to "Categories", "▲" to "Movies & Series", "▶" to "TV guide", "Back" to "Close",
+            "OK" to "Watch", "Hold OK" to "Favorite", "◀" to "Categories", "▶" to "TV guide", "Back" to "Close",
         )
         timeFmt = android.text.format.DateFormat.getTimeFormat(this)
 
@@ -120,7 +121,8 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         cardSpinner = findViewById(R.id.cardSpinner)
 
         appsAdapter = AppsAdapter(this)
-        buildTabs()
+        mainPlayerView = pv
+        setUpHub()
         guide.listener = this
         groupsList.adapter = groupAdapter
         channelsList.adapter = channelAdapter
@@ -164,27 +166,147 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         }
     }
 
-    private var tabViews: Map<SectionTabs.Section, View> = emptyMap()
+    // ---------------- home (hub) ----------------
 
-    /** Live TV · Movies · Series · Help across the top of the channel list. */
-    private fun buildTabs() {
-        tabViews = SectionTabs.build(this, findViewById(R.id.sectionTabs), SectionTabs.Section.LIVE, help = true) { s ->
-            when (s) {
-                SectionTabs.Section.MOVIES, SectionTabs.Section.SERIES -> {
-                    hideOverlays()
-                    startActivity(Intent(this, VodActivity::class.java).putExtra(VodActivity.EXTRA_SERIES, s == SectionTabs.Section.SERIES))
-                }
-                SectionTabs.Section.HELP -> showHelp()
-                SectionTabs.Section.LIVE -> Unit
+    private lateinit var hub: View
+    private lateinit var hubPlayer: PlayerView
+    private lateinit var mainPlayerView: PlayerView
+    private val hubVisible get() = ::hub.isInitialized && hub.visibility == View.VISIBLE
+
+    private fun setUpHub() {
+        hub = findViewById(R.id.hub)
+        hubPlayer = findViewById(R.id.hubPlayer)
+        hubPlayer.isFocusable = false
+        hubPlayer.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        val live = findViewById<View>(R.id.hubLive)
+        val movies = findViewById<View>(R.id.hubMovies)
+        val series = findViewById<View>(R.id.hubSeries)
+        for (v in listOf(live, movies, series)) {
+            v.clipToOutline = true
+            v.setOnFocusChangeListener { t, has -> t.animate().scaleX(if (has) 1.03f else 1f).scaleY(if (has) 1.03f else 1f).setDuration(150).start() }
+        }
+        live.setOnClickListener { hideHub(); openList() }
+        movies.setOnClickListener { openVod(false) }
+        series.setOnClickListener { openVod(true) }
+        findViewById<View>(R.id.hubApps).setOnClickListener { goHome() }
+        findViewById<TextView>(R.id.hubHint).text =
+            Display.hints("OK" to "Open", "◀ ▶ ▲ ▼" to "Move", "Back" to "Watch TV", "☰" to "Help")
+    }
+
+    private fun openVod(series: Boolean) {
+        startActivity(Intent(this, VodActivity::class.java).putExtra(VodActivity.EXTRA_SERIES, series))
+    }
+
+    /** Zapper's home: the channel keeps playing inside the Live TV tile. */
+    private fun showHub() {
+        if (groups.isEmpty()) return
+        hideOverlays()
+        infoBar.visibility = View.GONE
+        help.visibility = View.GONE
+        hub.visibility = View.VISIBLE
+        PlayerView.switchTargetView(player.exo, mainPlayerView, hubPlayer)
+        refreshHub()
+        findViewById<View>(R.id.hubLive).requestFocus()
+    }
+
+    private fun hideHub() {
+        if (!hubVisible) return
+        hub.visibility = View.GONE
+        PlayerView.switchTargetView(player.exo, hubPlayer, mainPlayerView)
+    }
+
+    private fun refreshHub() {
+        if (!hubVisible) return
+        val now = System.currentTimeMillis()
+        val h = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        findViewById<TextView>(R.id.hubGreeting).text = when (h) { in 4..11 -> "Good morning"; in 12..16 -> "Good afternoon"; else -> "Good evening" }
+        findViewById<TextView>(R.id.hubClock).text = fmt(now)
+        val ch = current
+        findViewById<TextView>(R.id.hubLiveName).text = ch?.let { Display.channelTitle(it.name) } ?: "Live TV"
+        val p = ch?.let { Epg.at(Repo.programmes(it), now) }
+        findViewById<TextView>(R.id.hubLiveNow).text = when {
+            p != null -> "Now: ${p.title} · until ${fmt(p.stop)}"
+            ch != null -> "Channel ${ch.number}"
+            else -> ""
+        }
+        val vod = Repo.hasVod
+        findViewById<View>(R.id.hubMovies).visibility = if (vod) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.hubSeries).visibility = if (vod) View.VISIBLE else View.GONE
+        findViewById<TextView>(R.id.hubMoviesCount).text = groupAdapter.movieCount?.let { "%,d titles".format(it) } ?: ""
+        findViewById<TextView>(R.id.hubSeriesCount).text = groupAdapter.seriesCount?.let { "%,d shows".format(it) } ?: ""
+        fillContinue()
+    }
+
+    /** Last channels and unfinished movies/episodes, newest first. */
+    private fun fillContinue() {
+        val row = findViewById<LinearLayout>(R.id.hubContinue)
+        row.removeAllViews()
+        val d = resources.displayMetrics.density
+        val all = groups.getOrNull(allIndex)?.channels ?: emptyList()
+        val byUrl = all.associateBy { it.url }
+        val channels = Repo.recentUrls.filter { it != current?.url }.mapNotNull { byUrl[it] }.take(2)
+        val vod = dev.yash.zapper.data.ResumeStore.all()
+            .filter { it.duration <= 0 || it.position < it.duration - 60_000 }
+            .distinctBy { if (it.series != null) "s:" + it.title else it.key }
+            .take(6)
+        val inflater = layoutInflater
+        fun card(): View = inflater.inflate(R.layout.item_continue, row, false).also {
+            Fonts.apply(it)
+            it.clipToOutline = true
+            it.setOnFocusChangeListener { v, has ->
+                v.animate().scaleX(if (has) 1.05f else 1f).scaleY(if (has) 1.05f else 1f).setDuration(150).start()
+                if (has) (row.parent as? android.widget.HorizontalScrollView)?.smoothScrollTo((v.left - 40 * d).toInt().coerceAtLeast(0), 0)
             }
         }
-        val live = tabViews[SectionTabs.Section.LIVE]
-        for (v in tabViews.values) v.nextFocusDownId = R.id.channelsList
-        live?.setOnClickListener { channelsList.requestFocus() }
-        groupsList.nextFocusUpId = live?.id ?: View.NO_ID
-        channelsList.nextFocusUpId = live?.id ?: View.NO_ID
-        // Tabs count as "using the list", so the panel doesn't close underneath.
-        for (v in tabViews.values) v.setOnFocusChangeListener { _, has -> if (has) bumpIdle() }
+        val views = ArrayList<View>()
+        // The channel before this one goes first: the most likely thing to switch back to.
+        for (c in channels) {
+            val v = card()
+            v.findViewById<ImageView>(R.id.cLogo).apply { visibility = View.VISIBLE; Logos.into(this, c.logo, name = c.name) }
+            v.findViewById<TextView>(R.id.cTitle).text = Display.channelName(c.name)
+            val p = Epg.at(Repo.programmes(c), System.currentTimeMillis())
+            v.findViewById<TextView>(R.id.cSub).text = p?.let { "Now: ${it.title}" } ?: "Channel ${c.number}"
+            v.setOnClickListener { hideHub(); playChannel(c, allIndex) }
+            views.add(v)
+        }
+        for (e in vod) {
+            val v = card()
+            v.findViewById<ImageView>(R.id.cImage).apply { visibility = View.VISIBLE; Logos.into(this, e.poster, Logos.POSTER_PX) }
+            v.findViewById<View>(R.id.cScrim).visibility = View.VISIBLE
+            v.findViewById<TextView>(R.id.cTitle).text = e.title
+            val left = if (e.duration > 0) (e.duration - e.position) / 60_000 else -1
+            val leftText = when {
+                left < 0 -> null
+                left >= 60 -> "${left / 60} h ${left % 60} min left"
+                else -> "$left min left"
+            }
+            val what = if (e.series != null) shortEpisode(e.subtitle) else "Movie"
+            v.findViewById<TextView>(R.id.cSub).text = listOfNotNull(what, leftText).joinToString(" · ")
+            if (e.duration > 0) v.findViewById<ProgressBar>(R.id.cProgress).apply {
+                visibility = View.VISIBLE
+                progress = ((e.position * 1000) / e.duration).toInt()
+            }
+            v.setOnClickListener { VodSession.play(this, e.toRequest()) }
+            views.add(v)
+        }
+        views.forEachIndexed { i, v ->
+            row.addView(v, LinearLayout.LayoutParams((200 * d).toInt(), (112 * d).toInt()).apply { if (i > 0) marginStart = (14 * d).toInt() })
+        }
+        val empty = views.isEmpty()
+        findViewById<View>(R.id.hubContinueTitle).visibility = if (empty) View.GONE else View.VISIBLE
+        findViewById<View>(R.id.hubContinueScroll).visibility = if (empty) View.GONE else View.VISIBLE
+    }
+
+    /** "Season 2 · Episode 3 · …" → "S2 E3". */
+    private fun shortEpisode(s: String?): String? {
+        s ?: return null
+        val season = Regex("(?i)season\\s*(\\d+)").find(s)?.groupValues?.get(1)
+        val ep = Regex("(?i)episode\\s*(\\d+)").find(s)?.groupValues?.get(1)
+        return when {
+            season != null && ep != null -> "S$season E$ep"
+            ep != null -> "Episode $ep"
+            else -> s
+        }
     }
 
     /** Index of "All channels" (number entry, zapping from Recently watched). */
@@ -272,6 +394,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         super.onResume()
         ConfigServer.listener = { onSettingsChanged() }
         onSettingsChanged()
+        refreshHub()
     }
 
     override fun onPause() {
@@ -404,7 +527,6 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         }
         if (cardKind == Card.LOADING || cardKind == Card.ERROR) hideCard()
         groups = Repo.groups()
-        buildTabs()
         groupAdapter.items = groups
         val lastUrl = current?.url ?: Repo.lastChannelUrl
         var gi = groups.indexOfFirst { it.title == Repo.lastGroup }
@@ -431,6 +553,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
                 groupAdapter.movieCount = m
                 groupAdapter.seriesCount = sr
                 groupAdapter.notifyDataSetChanged()
+                refreshHub()
             }
         }
     }
@@ -444,7 +567,6 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
 
     private fun applyDisplaySettings() {
         groups = Repo.groups()
-        buildTabs()
         groupAdapter.items = groups
         playGroup = playGroup.coerceAtMost(groups.size - 1)
         browseGroup = browseGroup.coerceAtMost(groups.size - 1)
@@ -524,7 +646,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
     }
 
     private fun showInfo(timeoutMs: Long = 5000) {
-        if (mode != Mode.PLAYER) return
+        if (mode != Mode.PLAYER || hubVisible) return
         infoBar.visibility = View.VISIBLE
         updateInfo()
         main.removeCallbacks(hideInfo)
@@ -647,6 +769,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
     }
 
     private fun showCard(kind: Card, title: String, body: String, button: String? = null, spinner: Boolean = false, action: (() -> Unit)? = null) {
+        hideHub()
         cardKind = kind
         cardAction = action
         cardTitle.text = title
@@ -669,7 +792,6 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         val added = Repo.toggleFavorite(ch)
         toast(if (added) "★ Added ${Display.channelName(ch.name)} to Favorites" else "Removed ${Display.channelName(ch.name)} from Favorites")
         groups = Repo.groups()
-        buildTabs()
         groupAdapter.items = groups
         if (mode == Mode.LIST) showGroupContent(groups.getOrNull(browseGroup))
         channelAdapter.notifyDataSetChanged()
@@ -760,6 +882,8 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        // On the home screen the arrows and OK move between tiles as usual.
+        if (hubVisible) return super.onKeyDown(keyCode, event)
         when (mode) {
             Mode.LIST -> {
                 if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && groupsList.hasFocus() &&
@@ -843,14 +967,10 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         when {
+            hubVisible -> hideHub()
             mode != Mode.PLAYER -> hideOverlays()
             vodTitle != null -> exitVod()
-            infoBar.visibility == View.VISIBLE && System.currentTimeMillis() - lastBackAt < 2500 -> goHome()
-            else -> {
-                lastBackAt = System.currentTimeMillis()
-                showInfo()
-                infoNext.text = Display.hints("Back" to "again for the home screen", "OK" to "All channels")
-            }
+            else -> showHub()
         }
     }
 

@@ -1,0 +1,330 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Zapper's home: Live TV (playing in its tile) · Movies · Series, then "Pick up where you left off". -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/hub"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/ink"
+    android:orientation="vertical"
+    android:paddingStart="40dp"
+    android:paddingTop="28dp"
+    android:paddingEnd="40dp"
+    android:visibility="gone">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/hubGreeting"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="@color/text"
+            android:textSize="26sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:id="@+id/hubApps"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:layout_marginEnd="20dp"
+            android:background="@drawable/season_tab"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="16dp"
+            android:paddingEnd="20dp">
+
+            <ImageView
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:duplicateParentState="true"
+                android:src="@drawable/ic_home"
+                android:tint="@color/text_tab_sel" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:duplicateParentState="true"
+                android:tag="medium"
+                android:text="YouTube &amp; apps"
+                android:textColor="@color/text_tab_sel"
+                android:textSize="17sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/hubClock"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/text2"
+            android:textSize="18sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="224dp"
+        android:layout_marginTop="20dp"
+        android:clipChildren="false"
+        android:orientation="horizontal">
+
+        <!-- Live TV: the channel keeps playing inside this tile -->
+        <FrameLayout
+            android:id="@+id/hubLive"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="2.1"
+            android:background="@drawable/tile_live"
+            android:focusable="true"
+            android:foreground="@drawable/tile_focus"
+            android:nextFocusUp="@id/hubApps">
+
+            <androidx.media3.ui.PlayerView
+                android:id="@+id/hubPlayer"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_margin="4dp"
+                android:focusable="false"
+                app:resize_mode="zoom"
+                app:shutter_background_color="#000000"
+                app:surface_type="texture_view"
+                app:use_controller="false" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_margin="4dp"
+                android:background="@drawable/tile_scrim" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:orientation="vertical"
+                android:padding="22dp">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:src="@drawable/ic_tv"
+                        android:tint="@color/focus" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:text="Live TV"
+                        android:textColor="@color/focus"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:background="@drawable/live_badge"
+                        android:paddingStart="8dp"
+                        android:paddingEnd="8dp"
+                        android:text="● LIVE"
+                        android:textColor="#FFFFFF"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/hubLiveName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/text"
+                    android:textSize="28sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/hubLiveNow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/text2"
+                    android:textSize="15sp" />
+            </LinearLayout>
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/hubMovies"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="18dp"
+            android:layout_weight="1"
+            android:background="@drawable/tile_movies"
+            android:focusable="true"
+            android:foreground="@drawable/tile_focus"
+            android:nextFocusUp="@id/hubApps">
+
+            <View
+                android:layout_width="70dp"
+                android:layout_height="100dp"
+                android:layout_gravity="end|top"
+                android:layout_marginTop="22dp"
+                android:layout_marginEnd="34dp"
+                android:background="@drawable/deco_card"
+                android:rotation="8" />
+
+            <View
+                android:layout_width="70dp"
+                android:layout_height="100dp"
+                android:layout_gravity="end|top"
+                android:layout_marginTop="34dp"
+                android:layout_marginEnd="-26dp"
+                android:background="@drawable/deco_card"
+                android:rotation="8" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|start"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <ImageView
+                    android:layout_width="30dp"
+                    android:layout_height="30dp"
+                    android:src="@drawable/ic_movie" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Movies"
+                    android:textColor="@color/text"
+                    android:textSize="24sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/hubMoviesCount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:tag="medium"
+                    android:textColor="@color/text2"
+                    android:textSize="14sp" />
+            </LinearLayout>
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/hubSeries"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="18dp"
+            android:layout_weight="1"
+            android:background="@drawable/tile_series"
+            android:focusable="true"
+            android:foreground="@drawable/tile_focus"
+            android:nextFocusUp="@id/hubApps">
+
+            <View
+                android:layout_width="70dp"
+                android:layout_height="100dp"
+                android:layout_gravity="end|top"
+                android:layout_marginTop="22dp"
+                android:layout_marginEnd="34dp"
+                android:background="@drawable/deco_card"
+                android:rotation="8" />
+
+            <View
+                android:layout_width="70dp"
+                android:layout_height="100dp"
+                android:layout_gravity="end|top"
+                android:layout_marginTop="34dp"
+                android:layout_marginEnd="-26dp"
+                android:background="@drawable/deco_card"
+                android:rotation="8" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|start"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <ImageView
+                    android:layout_width="30dp"
+                    android:layout_height="30dp"
+                    android:src="@drawable/ic_series" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Series"
+                    android:textColor="@color/text"
+                    android:textSize="24sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/hubSeriesCount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:tag="medium"
+                    android:textColor="@color/text2"
+                    android:textSize="14sp" />
+            </LinearLayout>
+        </FrameLayout>
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/hubContinueTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:text="Pick up where you left off"
+        android:textColor="@color/text"
+        android:textSize="17sp"
+        android:textStyle="bold" />
+
+    <HorizontalScrollView
+        android:id="@+id/hubContinueScroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="-8dp"
+        android:layout_marginTop="4dp"
+        android:clipToPadding="false"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/hubContinue"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp" />
+    </HorizontalScrollView>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <TextView
+        android:id="@+id/hubHint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:paddingBottom="16dp"
+        android:textColor="@color/text2"
+        android:textSize="14sp" />
+</LinearLayout>

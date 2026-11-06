@@ -153,14 +153,15 @@
             android:paddingEnd="30dp"
             android:paddingBottom="14dp">
 
-            <!-- Live TV · Movies · Series · Help -->
-            <LinearLayout
-                android:id="@+id/sectionTabs"
+            <TextView
+                android:id="@+id/panelTitle"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:gravity="center_vertical"
-                android:orientation="horizontal" />
+                android:text="Live TV"
+                android:textColor="@color/text"
+                android:textSize="28sp"
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/panelClock"
@@ -234,6 +235,8 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:visibility="gone" />
+
+    <include layout="@layout/hub" />
 
     <!-- Help screen (☰ while watching) -->
     <LinearLayout

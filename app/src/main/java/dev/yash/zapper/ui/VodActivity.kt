@@ -98,7 +98,7 @@ class VodActivity : Activity() {
         series = intent.getBooleanExtra(EXTRA_SERIES, false)
         searchBox = findViewById(R.id.vodSearch)
         findViewById<TextView>(R.id.vodHint).text =
-            Display.hints("OK" to "Open", "◀" to "Categories", "▲" to "Live TV · Movies · Series", "Back" to "Live TV")
+            Display.hints("OK" to "Open", "◀" to "Categories", "Back" to "Home")
         searchBox.setOnEditorActionListener { _, actionId, event ->
             val enter = event != null && event.keyCode == android.view.KeyEvent.KEYCODE_ENTER &&
                 event.action == android.view.KeyEvent.ACTION_DOWN
@@ -106,18 +106,11 @@ class VodActivity : Activity() {
                 actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE || enter
             ) { runSearch(searchBox.text.toString()); true } else false
         }
-        val tabs = SectionTabs.build(this, findViewById(R.id.vodTabs), if (series) SectionTabs.Section.SERIES else SectionTabs.Section.MOVIES, help = false) { s ->
-            when (s) {
-                SectionTabs.Section.LIVE -> finish()
-                SectionTabs.Section.MOVIES, SectionTabs.Section.SERIES -> {
-                    startActivity(Intent(this, VodActivity::class.java).putExtra(EXTRA_SERIES, s == SectionTabs.Section.SERIES))
-                    finish()
-                    overridePendingTransition(0, 0)
-                }
-                SectionTabs.Section.HELP -> Unit
-            }
+        findViewById<TextView>(R.id.vodTitle).apply {
+            text = if (series) "Series" else "Movies"
+            setCompoundDrawablesRelativeWithIntrinsicBounds(if (series) R.drawable.ic_series else R.drawable.ic_movie, 0, 0, 0)
+            compoundDrawablePadding = (14 * resources.displayMetrics.density).toInt()
         }
-        tabs.values.forEach { it.nextFocusDownId = R.id.vodCategories }
         subtitle = findViewById(R.id.vodSubtitle)
         categoriesList = findViewById(R.id.vodCategories)
         grid = findViewById(R.id.vodGrid)
