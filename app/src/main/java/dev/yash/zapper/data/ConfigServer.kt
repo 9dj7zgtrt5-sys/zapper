@@ -71,7 +71,14 @@ object ConfigServer {
                 String(buf, 0, read, Charsets.UTF_8)
             } else ""
 
-            val html = if (method == "POST" && path.startsWith("/save")) {
+            val html = if (method == "POST" && path.startsWith("/test")) {
+                val lines = if (Repo.isPortal && Repo.portalUrl.isNotBlank()) Repo.newStalker().diagnose()
+                else listOf("Choose \"Portal + MAC address\" and save a portal URL first.")
+                page(
+                    "<h2>Portal connection test</h2><pre>" + lines.joinToString("\n") { esc(it) } + "</pre>" +
+                        "<p class='muted'>Send a screenshot of this page if it fails.</p><p><a href='/'>Back to settings</a></p>"
+                )
+            } else if (method == "POST" && path.startsWith("/save")) {
                 val form = parseForm(body)
                 save(form)
                 if (form.any { it.first == "newmac" })
@@ -112,6 +119,10 @@ object ConfigServer {
                 requireVpn = on("requirevpn"),
                 hideVod = on("hidevod"),
                 vpnPackage = v("vpnpkg") ?: "",
+                stbSn = v("stb_sn") ?: "",
+                stbDeviceId = v("stb_dev1") ?: "",
+                stbDeviceId2 = v("stb_dev2") ?: "",
+                stbSignature = v("stb_sig") ?: "",
                 hiddenGroups = hidden,
                 forceReload = v("reload") != null,
             )
@@ -199,6 +210,13 @@ object ConfigServer {
               $groupRows
 
               <h3>Advanced</h3>
+              <details><summary>Box identity (only if your provider locked the MAC to a device)</summary>
+                <p class="muted">Copy these from the app or box the MAC worked in before (e.g. STB Emulator → Profile → STB configuration). Leave blank to auto-generate.</p>
+                <label>Serial number</label><input name="stb_sn" value="${esc(Repo.stbSn)}" autocapitalize="characters" autocorrect="off">
+                <label>Device ID 1</label><input name="stb_dev1" value="${esc(Repo.stbDeviceId)}" autocapitalize="characters" autocorrect="off">
+                <label>Device ID 2</label><input name="stb_dev2" value="${esc(Repo.stbDeviceId2)}" autocapitalize="characters" autocorrect="off">
+                <label>Signature</label><input name="stb_sig" value="${esc(Repo.stbSignature)}" autocapitalize="characters" autocorrect="off">
+              </details>
               <label class="row"><input type="checkbox" name="reverse" ${checked(Repo.reverseZap)}> Reverse ▲/▼ channel switching</label>
               <label>User agent <small>(only if the provider needs one)</small></label>
               <input name="ua" value="${esc(Repo.customUserAgent)}" placeholder="${esc(Repo.DEFAULT_UA)}">
@@ -210,6 +228,7 @@ object ConfigServer {
                 <button type="submit" name="reload" value="1" class="secondary">Save &amp; reload channels</button>
               </div>
             </form>
+            <form method="post" action="/test"><button type="submit" class="secondary" style="margin-top:12px">🔍 Test portal connection</button></form>
             <script>function src(){var p=document.querySelector("input[name=source][value=portal]").checked;document.getElementById("portalBox").style.display=p?"":"none";document.getElementById("m3uBox").style.display=p?"none":""}src();
             function setAll(v){document.querySelectorAll("input[name=g]").forEach(function(c){c.checked=v})}</script>
             """.trimIndent()
@@ -230,7 +249,7 @@ object ConfigServer {
         .tools{display:flex;gap:8px;margin:8px 0}.tools button{width:auto;margin:0;padding:8px 12px;font-size:14px;background:#262b31}
         .buttons{display:flex;flex-direction:column;gap:10px;margin-top:24px}
         button{width:100%;padding:14px;border:0;border-radius:8px;background:#3d7eff;color:#fff;font-size:16px;font-weight:600}
-        button.secondary{background:#262b31}a{color:#8ab4f8}
+        button.secondary{background:#262b31}pre{white-space:pre-wrap;word-break:break-all;background:#1b1f24;padding:12px;border-radius:8px;font-size:13px;line-height:1.5}summary{cursor:pointer;margin:14px 0;color:#8ab4f8}a{color:#8ab4f8}
         </style></head><body>$body</body></html>
     """.trimIndent()
 

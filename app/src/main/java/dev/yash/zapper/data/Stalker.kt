@@ -13,16 +13,46 @@ import java.util.TimeZone
  * Client for MAC-address based "Stalker" / Ministra middleware portals (the MAG set-top box system).
  * Signs in like a MAG250 box using the MAC the provider registered.
  */
-class StalkerClient(portal: String, mac: String) {
+class StalkerClient(
+    portal: String,
+    mac: String,
+    /** Optional overrides for providers that lock a MAC to one box's serial / device IDs. */
+    snOverride: String = "",
+    deviceIdOverride: String = "",
+    deviceId2Override: String = "",
+    signatureOverride: String = "",
+) {
     class AuthException(msg: String) : IOException(msg)
+
+    /** How the client identifies itself; tried in order until the portal accepts one. */
+    private class Variant(val model: String, val ua: String, val xua: String, val encodeCookie: Boolean, val randomToken: Boolean)
+
+    private val variants = listOf(
+        Variant("MAG250", UA, "Model: MAG250; Link: WiFi", true, false),
+        Variant(
+            "MAG254",
+            "Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 4 rev: 2116 Mobile Safari/533.3",
+            "Model: MAG254; Link: Ethernet", false, true,
+        ),
+        Variant(
+            "MAG322",
+            "Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3",
+            "Model: MAG322; Link: Ethernet,WiFi", true, true,
+        ),
+    )
 
     val mac: String = normalizeMac(mac)
     private val portalUrl = portal.trim().let { if (it.startsWith("http", ignoreCase = true)) it else "http://$it" }
     @Volatile private var api: String? = null
     @Volatile private var token: String? = null
-    private val sn = hash("MD5", this.mac).take(13)
-    private val deviceId = hash("SHA-256", this.mac)
-    private val signature = hash("SHA-256", sn + this.mac)
+    @Volatile private var variant: Variant = variants[0]
+    private val sn = snOverride.trim().ifEmpty { hash("MD5", this.mac).take(13) }
+    private val deviceId = deviceIdOverride.trim().ifEmpty { hash("SHA-256", this.mac) }
+    private val deviceId2 = deviceId2Override.trim().ifEmpty { deviceId }
+    private val signature = signatureOverride.trim().ifEmpty { hash("SHA-256", sn + this.mac) }
+
+    /** When set, every request is described here (used by the connection test). */
+    private var log: MutableList<String>? = null
 
     private fun root(): String {
         val u = portalUrl.trimEnd('/')
@@ -40,71 +70,115 @@ class StalkerClient(portal: String, mac: String) {
         val list = ArrayList<String>()
         if (u.endsWith(".php")) list.add(u)
         if (u.contains("/stalker_portal")) list.add("$r/stalker_portal/server/load.php")
-        list.add("$r/server/load.php")
         list.add("$r/portal.php")
+        list.add("$r/server/load.php")
         list.add("$r/stalker_portal/server/load.php")
         return list.distinct()
     }
 
+    private fun referer(apiUrl: String) =
+        if (apiUrl.contains("/stalker_portal/")) root() + "/stalker_portal/c/" else root() + "/c/"
+
     private fun get(apiUrl: String, query: String): JSONObject {
+        val v = variant
         val c = URL("$apiUrl?$query&JsHttpRequest=1-xml").openConnection() as HttpURLConnection
         c.connectTimeout = 15_000
         c.readTimeout = 45_000
         c.instanceFollowRedirects = true
-        c.setRequestProperty("User-Agent", UA)
-        c.setRequestProperty("X-User-Agent", "Model: MAG250; Link: WiFi")
-        c.setRequestProperty("Referer", root() + "/c/")
+        c.setRequestProperty("User-Agent", v.ua)
+        c.setRequestProperty("X-User-Agent", v.xua)
+        c.setRequestProperty("Referer", referer(apiUrl))
         c.setRequestProperty("Accept", "*/*")
+        val macCookie = if (v.encodeCookie) URLEncoder.encode(mac, "UTF-8") else mac
         c.setRequestProperty(
             "Cookie",
-            "mac=${URLEncoder.encode(mac, "UTF-8")}; stb_lang=en; timezone=${URLEncoder.encode(TimeZone.getDefault().id, "UTF-8")}",
+            "mac=$macCookie; stb_lang=en; timezone=${URLEncoder.encode(TimeZone.getDefault().id, "UTF-8")}",
         )
         token?.let { c.setRequestProperty("Authorization", "Bearer $it") }
+        val action = Regex("action=([a-z_]+)").find(query)?.groupValues?.get(1) ?: "?"
         try {
             val code = c.responseCode
             val body = (if (code in 200..299) c.inputStream else c.errorStream)
                 ?.bufferedReader()?.use { it.readText() } ?: ""
-            if (code == 401 || code == 403) throw AuthException("Portal refused access (HTTP $code)")
-            if (code !in 200..299) throw IOException("Portal error (HTTP $code)")
-            if (body.contains("Authorization failed", ignoreCase = true)) throw AuthException("Authorization failed")
+            log?.add("${v.model}  $action  →  HTTP $code   ${apiUrl.substringAfter("://").substringAfter('/')}   ${snippet(body)}")
+            if (code == 401 || code == 403) throw AuthException("HTTP $code at $action" + snippet(body).let { if (it.isNotEmpty()) " — $it" else "" })
+            if (code !in 200..299) throw IOException("Portal error (HTTP $code at $action)")
+            if (body.contains("Authorization failed", ignoreCase = true)) throw AuthException("Authorization failed at $action")
             val start = body.indexOf('{')
-            if (start < 0) throw IOException("Unexpected reply from portal")
+            if (start < 0) throw IOException("Unexpected reply from portal at $action")
             return JSONObject(body.substring(start))
+        } catch (e: IOException) {
+            if (log != null && e !is AuthException && !(e.message ?: "").startsWith("Portal error") && !(e.message ?: "").startsWith("Unexpected"))
+                log?.add("${v.model}  $action  →  ${e.javaClass.simpleName}: ${e.message}")
+            throw e
         } finally {
             c.disconnect()
         }
     }
 
-    /** Handshake + profile. Tries the usual API paths until one answers. */
+    /** Handshake + profile. Tries the usual API paths and box identities until one is accepted. */
     @Synchronized
     fun connect() {
         var lastErr: Exception? = null
-        for (a in api?.let { listOf(it) } ?: candidates()) {
-            try {
-                token = null
-                val hs = get(a, "type=stb&action=handshake&token=&prehash=0")
-                val t = hs.optJSONObject("js")?.optString("token").orEmpty()
-                if (t.isEmpty()) throw IOException("Portal did not return a session")
-                token = t
-                api = a
-                val profile = get(
-                    a,
-                    "type=stb&action=get_profile&hd=1&ver=ImageDescription%3A%200.2.18-r23-250&num_banks=2" +
-                        "&sn=$sn&stb_type=MAG250&image_version=218&video_out=hdmi&device_id=$deviceId" +
-                        "&device_id2=$deviceId&signature=$signature&auth_second_step=1&hw_version=1.7-BD-00" +
-                        "&not_valid_token=0&api_signature=262&prehash=",
-                )
-                val js = profile.optJSONObject("js")
-                val block = js?.optString("block_msg").orEmpty()
-                if (block.isNotBlank()) throw AuthException(block)
-                return
-            } catch (e: Exception) {
-                lastErr = e
-                if (e is AuthException && api != null) break
+        var best: Exception? = null
+        val apis = api?.let { listOf(it) } ?: candidates()
+        val vs = if (api != null) listOf(variant) else variants
+        for (a in apis) {
+            for (v in vs) {
+                try {
+                    variant = v
+                    token = null
+                    val tok = if (v.randomToken) hash("MD5", "$mac${System.nanoTime()}").take(32) else ""
+                    val hs = get(a, "type=stb&action=handshake&token=$tok&prehash=0")
+                    val t = hs.optJSONObject("js")?.optString("token").orEmpty().ifEmpty { tok }
+                    if (t.isEmpty()) throw IOException("Portal did not return a session")
+                    token = t
+                    api = a
+                    val profile = get(
+                        a,
+                        "type=stb&action=get_profile&hd=1&ver=ImageDescription%3A%200.2.18-r23-250&num_banks=2" +
+                            "&sn=$sn&stb_type=${v.model}&image_version=218&video_out=hdmi&device_id=$deviceId" +
+                            "&device_id2=$deviceId2&signature=$signature&auth_second_step=1&hw_version=1.7-BD-00" +
+                            "&not_valid_token=0&api_signature=262&prehash=",
+                    )
+                    val js = profile.optJSONObject("js")
+                    val block = js?.optString("block_msg").orEmpty()
+                    if (block.isNotBlank()) throw AuthException(block)
+                    return
+                } catch (e: Exception) {
+                    lastErr = e
+                    // Prefer reporting a refusal from a path that exists over a "not found" from a wrong path.
+                    if (e is AuthException || best == null) best = e
+                    api = null
+                }
             }
         }
         api = null
-        throw lastErr ?: IOException("Portal not reachable")
+        throw best ?: lastErr ?: IOException("Portal not reachable")
+    }
+
+    /** Step-by-step connection test for the phone settings page. */
+    fun diagnose(): List<String> {
+        val lines = ArrayList<String>()
+        lines.add("Portal: $portalUrl")
+        lines.add("MAC: $mac   (serial $sn)")
+        log = lines
+        try {
+            connect()
+            lines.add("✓ Signed in as ${variant.model} via ${api?.substringAfter("://")?.substringAfter('/')}")
+            val n = try { channels().size } catch (e: Exception) { lines.add("✗ Channel list failed: ${e.message}"); -1 }
+            if (n >= 0) lines.add("✓ $n channels")
+        } catch (e: Exception) {
+            lines.add("✗ ${e.message ?: e.javaClass.simpleName}")
+        } finally {
+            log = null
+        }
+        return lines
+    }
+
+    private fun snippet(body: String): String {
+        val text = body.replace(Regex("<[^>]*>"), " ").replace(Regex("\\s+"), " ").trim()
+        return if (text.length > 140) text.take(140) + "…" else text
     }
 
     /** Runs a portal call, signing in again once if the session expired. */

@@ -41,6 +41,13 @@ object Repo {
     val source: String get() = prefs.getString("source", "m3u")!!
     val isPortal: Boolean get() = source == "portal"
     val portalUrl: String get() = prefs.getString("portal", "")!!
+    /** Optional box identity overrides (serial, device IDs, signature) for MAC-locked portals. */
+    val stbSn: String get() = prefs.getString("stb_sn", "")!!
+    val stbDeviceId: String get() = prefs.getString("stb_dev1", "")!!
+    val stbDeviceId2: String get() = prefs.getString("stb_dev2", "")!!
+    val stbSignature: String get() = prefs.getString("stb_sig", "")!!
+
+    fun newStalker() = StalkerClient(portalUrl, mac, stbSn, stbDeviceId, stbDeviceId2, stbSignature)
     /** MAC used with the portal: the one entered in settings, else this TV's own generated MAC. */
     val mac: String get() = prefs.getString("mac", "")!!.ifBlank { deviceMac }
     val isConfigured: Boolean
@@ -101,6 +108,10 @@ object Repo {
         val requireVpn: Boolean = Repo.requireVpn,
         val hideVod: Boolean = Repo.hideVod,
         val vpnPackage: String = Repo.vpnPackage,
+        val stbSn: String = Repo.stbSn,
+        val stbDeviceId: String = Repo.stbDeviceId,
+        val stbDeviceId2: String = Repo.stbDeviceId2,
+        val stbSignature: String = Repo.stbSignature,
         val hiddenGroups: Set<String> = Repo.hiddenGroups,
         val forceReload: Boolean = false,
     )
@@ -108,7 +119,9 @@ object Repo {
     @Synchronized
     fun saveConfig(s: Settings) {
         val mac = StalkerClient.normalizeMac(s.mac)
-        val sourceChanged = s.m3u.trim() != m3uUrl || s.epg.trim() != epgUrl || s.ua.trim() != customUserAgent ||
+        val sourceChanged = s.stbSn.trim() != stbSn || s.stbDeviceId.trim() != stbDeviceId ||
+            s.stbDeviceId2.trim() != stbDeviceId2 || s.stbSignature.trim() != stbSignature ||
+            s.m3u.trim() != m3uUrl || s.epg.trim() != epgUrl || s.ua.trim() != customUserAgent ||
             s.source != source || s.portal.trim() != portalUrl || mac != this.mac
         val e = prefs.edit()
             .putString("source", s.source)
@@ -123,6 +136,10 @@ object Repo {
             .putBoolean("requirevpn", s.requireVpn)
             .putBoolean("hidevod", s.hideVod)
             .putString("vpnpkg", s.vpnPackage)
+            .putString("stb_sn", s.stbSn.trim())
+            .putString("stb_dev1", s.stbDeviceId.trim())
+            .putString("stb_dev2", s.stbDeviceId2.trim())
+            .putString("stb_sig", s.stbSignature.trim())
             .putString("hidden", s.hiddenGroups.joinToString("\n"))
         if (sourceChanged || s.forceReload) e.putInt("cfgver", configVersion + 1)
         else e.putInt("dispver", displayVersion + 1)
@@ -234,7 +251,7 @@ object Repo {
     private fun loadPortal(): String? {
         if (portalUrl.isBlank()) return "Portal URL missing"
         return try {
-            val c = StalkerClient(portalUrl, mac)
+            val c = newStalker()
             val list = c.channels()
             stalker = c
             channels = list
@@ -242,7 +259,7 @@ object Repo {
             subscriptionEnd = try { c.subscriptionEnd() } catch (_: Exception) { null }
             if (list.isEmpty()) "The portal sent no channels. Check the MAC address is the one your provider activated." else null
         } catch (e: StalkerClient.AuthException) {
-            "The portal didn't accept MAC $mac (${e.message}). Check it matches what your provider activated."
+            "The portal refused MAC $mac (${e.message}).\nIf your provider needs a VPN, turn it on. Otherwise check the MAC matches what they activated."
         } catch (e: Exception) {
             "Couldn't connect to the portal: ${e.message ?: e.javaClass.simpleName}"
         }
