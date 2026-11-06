@@ -446,19 +446,51 @@ class StalkerClient(
         val js = call("type=${item.sourceType}&action=get_ordered_list&movie_id=${enc(item.id)}&season_id=0&episode_id=0&p=1")
             .optJSONObject("js") ?: return emptyList()
         val data = js.optJSONArray("data") ?: return emptyList()
+        if (data.length() == 0) android.util.Log.w("Zapper", "No seasons for ${item.id}: ${snippet(js.toString())}")
         val out = ArrayList<Season>()
         for (i in 0 until data.length()) {
             val o = data.optJSONObject(i) ?: continue
-            val nums = ArrayList<Int>()
-            o.optJSONArray("series")?.let { a -> for (k in 0 until a.length()) a.optString(k).toIntOrNull()?.let { nums.add(it) } }
-            out.add(Season(o.optString("id"), o.optString("name").ifBlank { "Season ${i + 1}" }, o.optString("cmd").takeIf { it.isNotBlank() }, nums))
+            out.add(
+                Season(
+                    o.optString("id"),
+                    shortTitle(o.optString("name"), item.title, "Season", i + 1),
+                    o.optString("cmd").takeIf { it.isNotBlank() && it != "null" },
+                    numberList(o),
+                ),
+            )
         }
-        return out
+        // Season 1 first, whatever order the portal sends.
+        return out.sortedWith(compareBy { leadingNumber(it.title) ?: Int.MAX_VALUE })
+    }
+
+    /** Episode numbers listed on a season or item, as a JSON array or "1,2,3". */
+    private fun numberList(o: JSONObject): List<Int> {
+        val nums = ArrayList<Int>()
+        val arr = o.optJSONArray("series")
+        if (arr != null) for (k in 0 until arr.length()) arr.optString(k).trim().toIntOrNull()?.let { nums.add(it) }
+        else o.optString("series").split(',', ' ').mapNotNullTo(nums) { it.trim().toIntOrNull() }
+        return nums.distinct().sorted()
+    }
+
+    private fun leadingNumber(s: String): Int? = Regex("\\d+").find(s)?.value?.toIntOrNull()
+
+    /** "Season 2. Family Kirana Store" → "Season 2"; "Episode 3 - Show" → "Episode 3". */
+    private fun shortTitle(raw: String, show: String, word: String, fallback: Int): String {
+        val t = raw.trim()
+        if (t.isEmpty() || t == "null") return "$word $fallback"
+        Regex("(?i)^(season|episode|series|s|e)\\s*\\.?\\s*(\\d+)").find(t)?.let { m ->
+            val rest = t.substring(m.range.last + 1).trim().trimStart('.', '-', ':', '|').trim()
+            return if (rest.isEmpty() || rest.equals(show, true) || show.contains(rest, true)) "$word ${m.groupValues[2].toInt()}"
+            else "$word ${m.groupValues[2].toInt()} · $rest"
+        }
+        return t.removeSuffix(show).trim().trimEnd('.', '-', ':', '|').trim().ifEmpty { "$word $fallback" }
     }
 
     fun episodes(item: VodItem, season: Season): List<Episode> {
-        if (season.episodeNumbers.isNotEmpty() && season.cmd != null) {
-            return season.episodeNumbers.map { Episode("${item.id}:${season.id}:$it", "Episode $it", season.cmd, it) }
+        val fallbackCmd = season.cmd ?: item.cmd
+        // Season lists its episode numbers: each is played as season cmd + episode number.
+        if (season.episodeNumbers.isNotEmpty() && fallbackCmd != null) {
+            return season.episodeNumbers.map { Episode("${item.id}:${season.id}:$it", "Episode $it", fallbackCmd, it) }
         }
         val out = ArrayList<Episode>()
         var page = 1
@@ -468,17 +500,26 @@ class StalkerClient(
                 "type=${item.sourceType}&action=get_ordered_list&movie_id=${enc(item.id)}&season_id=${enc(season.id)}&episode_id=0&p=$page",
             ).optJSONObject("js") ?: break
             val per = js.optInt("max_page_items", 14).coerceAtLeast(1)
-            pages = (js.optInt("total_items", 0) + per - 1) / per
+            val total = js.optInt("total_items", 0)
             val data = js.optJSONArray("data") ?: break
+            pages = if (total > 0) (total + per - 1) / per else if (data.length() >= per) page + 1 else page
+            if (data.length() == 0 && page == 1) android.util.Log.w("Zapper", "No episodes for ${item.id}/${season.id}: ${snippet(js.toString())}")
             for (i in 0 until data.length()) {
                 val o = data.optJSONObject(i) ?: continue
-                val cmd = o.optString("cmd").takeIf { it.isNotBlank() } ?: continue
-                val num = o.optString("series_number").toIntOrNull()
-                out.add(Episode(o.optString("id"), o.optString("name").ifBlank { "Episode ${num ?: (out.size + 1)}" }, cmd, num))
+                val num = o.optString("series_number").toIntOrNull() ?: leadingNumber(o.optString("name"))
+                val cmd = o.optString("cmd").takeIf { it.isNotBlank() && it != "null" }
+                // Some portals return the season again, with its episode numbers, instead of episodes.
+                val inner = numberList(o)
+                if (cmd != null && inner.size > 1) {
+                    inner.forEach { n -> out.add(Episode("${o.optString("id")}:$n", "Episode $n", cmd, n)) }
+                    continue
+                }
+                val playCmd = cmd ?: fallbackCmd ?: continue
+                out.add(Episode(o.optString("id"), shortTitle(o.optString("name"), item.title, "Episode", num ?: (out.size + 1)), playCmd, num))
             }
             page++
         }
-        return out
+        return out.distinctBy { it.id }.sortedWith(compareBy { it.number ?: Int.MAX_VALUE })
     }
 
     /** Fresh playable link for a movie, or for one episode of a series. */

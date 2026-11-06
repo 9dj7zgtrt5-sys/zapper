@@ -80,29 +80,57 @@
             android:id="@+id/seriesBox"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_marginTop="18dp"
+            android:layout_marginTop="22dp"
             android:layout_weight="1"
-            android:orientation="horizontal"
+            android:orientation="vertical"
             android:visibility="gone">
 
-            <ListView
-                android:id="@+id/seasonsList"
-                android:layout_width="220dp"
-                android:layout_height="match_parent"
-                android:background="@color/ink_deep"
-                android:divider="@null"
-                android:listSelector="@drawable/list_selector"
-                android:scrollbars="none" />
+            <!-- Seasons as a row of pills; ◀ ▶ moves between them -->
+            <HorizontalScrollView
+                android:id="@+id/seasonScroll"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipToPadding="false"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/seasonTabs"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="4dp" />
+            </HorizontalScrollView>
+
+            <TextView
+                android:id="@+id/episodeCount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="6dp"
+                android:textColor="@color/text2"
+                android:textSize="17sp" />
 
             <ListView
                 android:id="@+id/episodesList"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="12dp"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
                 android:layout_weight="1"
                 android:divider="@null"
                 android:listSelector="@drawable/list_selector"
                 android:scrollbars="none" />
+
+            <TextView
+                android:id="@+id/episodesEmpty"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:lineSpacingExtra="6dp"
+                android:textColor="@color/text2"
+                android:textSize="20sp"
+                android:visibility="gone" />
         </LinearLayout>
 
         <ProgressBar

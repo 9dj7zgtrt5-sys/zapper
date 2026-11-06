@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Season pill: marigold when focused, raised with a marigold underline when it's the season shown. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_focused="true">
+        <shape><solid android:color="@color/focus" /><corners android:radius="28dp" /></shape>
+    </item>
+    <item android:state_selected="true">
+        <layer-list>
+            <item><shape><solid android:color="@color/raised" /><corners android:radius="28dp" /></shape></item>
+            <item android:gravity="bottom|center_horizontal" android:width="28dp" android:height="3dp" android:bottom="7dp">
+                <shape><solid android:color="@color/focus" /><corners android:radius="2dp" /></shape>
+            </item>
+        </layer-list>
+    </item>
+    <item>
+        <shape><solid android:color="@android:color/transparent" /><stroke android:width="2dp" android:color="@color/line" /><corners android:radius="28dp" /></shape>
+    </item>
+</selector>
