@@ -15,6 +15,25 @@ object Vpn {
         false
     }
 
+    /** Any network that can reach the internet (Wi-Fi or Ethernet), ignoring the VPN itself. */
+    fun hasInternet(ctx: Context): Boolean = try {
+        val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        cm.allNetworks.any {
+            val c = cm.getNetworkCapabilities(it)
+            c != null && !c.hasTransport(NetworkCapabilities.TRANSPORT_VPN) && c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        }
+    } catch (_: Exception) {
+        true
+    }
+
+    /** Changes whenever a network (VPN tunnel, Wi-Fi) comes or goes, e.g. a new VPN location. */
+    fun signature(ctx: Context): String = try {
+        val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        cm.allNetworks.map { it.toString() }.sorted().joinToString(",")
+    } catch (_: Exception) {
+        ""
+    }
+
     /** Installed apps that provide a VPN service. */
     fun apps(ctx: Context): List<App> {
         val pm = ctx.packageManager

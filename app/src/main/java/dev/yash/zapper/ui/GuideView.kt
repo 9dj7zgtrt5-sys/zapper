@@ -187,14 +187,14 @@ class GuideView(ctx: Context, attrs: AttributeSet?) : View(ctx, attrs) {
         if (ch == null) {
             c.drawText("No channels in this group", left, detailH / 2, big)
         } else {
-            val title = sel?.title?.ifBlank { null } ?: Display.pretty(ch.name)
+            val title = sel?.title?.ifBlank { null } ?: Display.channelName(ch.name)
             c.drawText(ellipsize(title, big, w - left * 2 - hintW), left, pad + 34 * dp, big)
             val meta = StringBuilder()
             if (sel != null) {
                 meta.append(dayFmt.format(Date(sel.start))).append("  ·  ")
                     .append(fmt(sel.start)).append(" – ").append(fmt(sel.stop)).append("  ·  ")
             }
-            meta.append(ch.number).append("  ").append(Display.pretty(ch.name))
+            meta.append(ch.number).append("  ").append(Display.channelName(ch.name))
             c.drawText(ellipsize(meta.toString(), dim, w - left * 2), left, pad + 62 * dp, dim)
             if (sel != null) {
                 val tag = when {
@@ -264,7 +264,7 @@ class GuideView(ctx: Context, attrs: AttributeSet?) : View(ctx, attrs) {
                 Logos.get(channel.logo) { if (it != null) invalidate() }
             }
             val fav = if (Repo.isFavorite(channel)) "★ " else ""
-            c.drawText(ellipsize(fav + Display.pretty(channel.name), text, gx - nx - pad), nx, y + rowH / 2 + 7 * dp, text)
+            c.drawText(ellipsize(fav + Display.channelName(channel.name), text, gx - nx - pad), nx, y + rowH / 2 + 7 * dp, text)
 
             // programmes
             val list = Repo.programmes(channel)

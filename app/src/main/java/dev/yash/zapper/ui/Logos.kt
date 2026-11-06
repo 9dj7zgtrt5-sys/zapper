@@ -47,11 +47,47 @@ object Logos {
         }
     }
 
-    fun into(iv: ImageView, url: String?, px: Int = LOGO_PX) {
-        iv.tag = url
+    /**
+     * Shows the logo at [url]. While it loads, or if there is none, shows a lettered tile made from
+     * [name] instead (when given), so no row ever has an empty box.
+     */
+    fun into(iv: ImageView, url: String?, px: Int = LOGO_PX, name: String? = null) {
+        val key = url ?: name
+        iv.tag = key
         val hit = cached(url, px)
-        iv.setImageBitmap(hit)
-        if (hit == null && !url.isNullOrBlank()) get(url, px) { b -> if (iv.tag == url) iv.setImageBitmap(b) }
+        val fallback = name?.let { monogram(it) }
+        iv.setImageBitmap(hit ?: fallback)
+        if (hit == null && !url.isNullOrBlank()) get(url, px) { b -> if (iv.tag == key) iv.setImageBitmap(b ?: fallback) }
+    }
+
+    private val monograms = LruCache<String, Bitmap>(300)
+    /** Muted tones that sit well on the dark indigo UI; picked by name so a channel keeps its colour. */
+    private val tones = intArrayOf(
+        0xFF3A4E7A.toInt(), 0xFF5B4A7A.toInt(), 0xFF2F6466.toInt(), 0xFF6A4A3C.toInt(),
+        0xFF4A5E3A.toInt(), 0xFF6B3F55.toInt(), 0xFF3C5A70.toInt(), 0xFF5E5634.toInt(),
+    )
+
+    fun monogram(name: String): Bitmap {
+        val letters = Display.initials(name)
+        monograms.get(name)?.let { return it }
+        val w = 168
+        val h = 108
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val c = android.graphics.Canvas(bmp)
+        val bg = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = tones[(Display.channelName(name).hashCode() and 0x7fffffff) % tones.size]
+        }
+        c.drawRoundRect(android.graphics.RectF(0f, 0f, w.toFloat(), h.toFloat()), 14f, 14f, bg)
+        val tp = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = Palette.TEXT
+            typeface = Fonts.semiboldFace
+            textSize = 52f
+            textAlign = android.graphics.Paint.Align.CENTER
+        }
+        val fm = tp.fontMetrics
+        c.drawText(letters, w / 2f, h / 2f - (fm.ascent + fm.descent) / 2, tp)
+        monograms.put(name, bmp)
+        return bmp
     }
 
     private fun load(url: String, px: Int): Bitmap? {

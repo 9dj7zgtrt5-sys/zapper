@@ -30,7 +30,7 @@ class TvPlayer(private val ctx: Context, view: PlayerView, private val cb: Callb
     ).build()
 
     private var url: String? = null
-    private var resolver: (() -> String?)? = null
+    private var resolver: ((Int) -> String?)? = null
     private var generation = 0
     private val bg = java.util.concurrent.Executors.newSingleThreadExecutor()
     private var ua: String = ""
@@ -73,10 +73,12 @@ class TvPlayer(private val ctx: Context, view: PlayerView, private val cb: Callb
     private fun retry(reason: String) {
         if (retries >= MAX_RETRIES) {
             cb.onPlayerMessage("This channel isn't working right now.\nPress ▲ or ▼ to watch another channel.")
+            // Live TV keeps trying quietly in the background, so it comes back by itself.
+            if (live) handler.postDelayed({ retries = 2; start(0) }, 180_000L)
             return
         }
         retries++
-        cb.onPlayerMessage("Reconnecting…")
+        cb.onPlayerMessage(RECONNECTING)
         val pos = if (live) 0L else exo.currentPosition
         handler.removeCallbacksAndMessages(null)
         handler.postDelayed({ start(pos) }, 1500L * retries)
@@ -86,7 +88,7 @@ class TvPlayer(private val ctx: Context, view: PlayerView, private val cb: Callb
      * @param resolver optional: fetches a fresh stream URL (on a background thread) before every
      *        (re)connect, for portals whose links expire.
      */
-    fun play(url: String, userAgent: String, live: Boolean, startPositionMs: Long = 0, resolver: (() -> String?)? = null) {
+    fun play(url: String, userAgent: String, live: Boolean, startPositionMs: Long = 0, resolver: ((Int) -> String?)? = null) {
         handler.removeCallbacksAndMessages(null)
         generation++
         this.resolver = resolver
@@ -104,8 +106,9 @@ class TvPlayer(private val ctx: Context, view: PlayerView, private val cb: Callb
         val r = resolver
         if (r == null) { startWith(url ?: return, positionMs); return }
         val gen = ++generation
+        val attempt = retries
         bg.execute {
-            val resolved = try { r() } catch (e: Exception) { Log.w("Zapper", "Link failed", e); null }
+            val resolved = try { r(attempt) } catch (e: Exception) { Log.w("Zapper", "Link failed", e); null }
             handler.post {
                 if (gen != generation) return@post
                 if (resolved == null) { Log.w("Zapper", "No stream link from portal"); retry("no link") } else {
@@ -131,6 +134,18 @@ class TvPlayer(private val ctx: Context, view: PlayerView, private val cb: Callb
         if (live || positionMs <= 0) exo.setMediaSource(source) else exo.setMediaSource(source, positionMs)
         exo.prepare()
         exo.playWhenReady = true
+    }
+
+    /** True while it is retrying or has given up (a message is showing instead of video). */
+    val struggling: Boolean get() = retries > 0
+
+    /** Tries again straight away with a fresh link and a full set of retries (e.g. the network came back). */
+    fun retryNow() {
+        if (url == null && resolver == null) return
+        handler.removeCallbacksAndMessages(null)
+        retries = 0
+        cb.onPlayerMessage(RECONNECTING)
+        start(if (live) 0 else exo.currentPosition)
     }
 
     /** Re-starts the current stream (e.g. after returning from background). */
@@ -165,5 +180,6 @@ class TvPlayer(private val ctx: Context, view: PlayerView, private val cb: Callb
 
     companion object {
         private const val MAX_RETRIES = 5
+        const val RECONNECTING = "Reconnecting…"
     }
 }

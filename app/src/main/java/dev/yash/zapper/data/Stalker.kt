@@ -365,6 +365,9 @@ class StalkerClient(
         return out
     }
 
+    /** Forgets the sign-in token (keeps the known API path), e.g. after the internet address changed. */
+    fun resetSession() { token = null }
+
     /** Some portals drop the session if the box stops checking in. */
     fun keepAlive() {
         call("type=watchdog&action=get_events&event_active_id=0&init=0&cur_play_type=1")

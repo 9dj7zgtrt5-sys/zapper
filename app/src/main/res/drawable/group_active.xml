@@ -1,9 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:left="10dp" android:right="10dp" android:top="3dp" android:bottom="3dp">
-        <shape><solid android:color="@color/raised" /><corners android:radius="12dp" /></shape>
+<!-- Marks the category whose channels are showing. Transparent while that row has focus, so the
+     marigold focus highlight (drawn behind the row) shows through with dark text on top. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_selected="true" android:drawable="@android:color/transparent" />
+    <item android:state_focused="true" android:drawable="@android:color/transparent" />
+    <item>
+        <layer-list>
+            <item android:left="10dp" android:right="10dp" android:top="3dp" android:bottom="3dp">
+                <shape><solid android:color="@color/raised" /><corners android:radius="12dp" /></shape>
+            </item>
+            <item android:left="10dp" android:top="16dp" android:bottom="16dp" android:width="4dp" android:gravity="left">
+                <shape><solid android:color="@color/focus" /><corners android:radius="2dp" /></shape>
+            </item>
+        </layer-list>
     </item>
-    <item android:left="10dp" android:top="16dp" android:bottom="16dp" android:width="4dp" android:gravity="left">
-        <shape><solid android:color="@color/focus" /><corners android:radius="2dp" /></shape>
-    </item>
-</layer-list>
+</selector>

@@ -37,7 +37,14 @@ class GroupAdapter : BaseAdapter() {
             Group.Kind.APPS, Group.Kind.HELP -> "›"
             else -> "%,d".format(g.channels.size)
         }
-        v.setBackgroundResource(if (position == activeIndex) R.drawable.group_active else 0)
+        val lastFixed = position + 1 < items.size && g.kind != Group.Kind.LIVE && items[position + 1].kind == Group.Kind.LIVE
+        v.setBackgroundResource(
+            when {
+                position == activeIndex -> R.drawable.group_active
+                lastFixed -> R.drawable.group_divider
+                else -> 0
+            },
+        )
         return v
     }
 }
@@ -65,13 +72,13 @@ class ChannelAdapter : BaseAdapter() {
         val h = v.tag as Holder
         val ch = items[position]
         h.num.text = if (ch.isVod) "" else ch.number.toString()
-        Logos.into(h.logo, ch.logo)
+        Logos.into(h.logo, ch.logo, name = if (ch.isVod) null else ch.name)
         val prefix = (if (ch.url == playingUrl) "▶ " else "") + (if (Repo.isFavorite(ch)) "★ " else "")
-        h.name.text = prefix + Display.pretty(ch.name)
+        h.name.text = if (ch.isVod) prefix + Display.pretty(ch.name) else Display.channelTitle(ch.name, prefix)
         val now = System.currentTimeMillis()
         val p = if (ch.isVod) null else Epg.at(Repo.programmes(ch), now)
         if (p != null) {
-            h.now.text = "Now:  " + p.title
+            h.now.text = "Now:  " + p.title + "  ·  until " + Display.clock(v.context, p.stop)
             h.now.visibility = View.VISIBLE
             h.progress.visibility = View.VISIBLE
             h.progress.progress = (((now - p.start) * 1000) / (p.stop - p.start)).toInt()

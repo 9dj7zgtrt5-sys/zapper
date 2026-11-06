@@ -168,8 +168,13 @@ object ConfigServer {
         fun on(k: String) = v(k) == "on"
         val hidden = if (v("groups_present") != null) {
             val shown = f.filter { it.first == "g" }.map { it.second }.toSet()
-            Repo.allGroupNames().map { it.first }.filter { it !in shown }.toSet()
+            Repo.allGroupNames().map { it.first }.filter { it !in shown && !(Repo.isAdult(it) && !on("showadult")) }.toSet()
         } else Repo.hiddenGroups
+        val hiddenVod = if (v("vod_present") != null) {
+            val shown = f.filter { it.first == "vc" }.map { it.second }.toSet()
+            val (m, s) = Repo.vodCategoriesForSettings()
+            (m.map { "m:" + it.title } + s.map { "s:" + it.title }).filter { it !in shown }.toSet()
+        } else Repo.hiddenVod
         Repo.saveConfig(
             Repo.Settings(
                 source = if (v("source") == "portal") "portal" else "m3u",
@@ -189,6 +194,8 @@ object ConfigServer {
                 stbDeviceId2 = v("stb_dev2") ?: "",
                 stbSignature = v("stb_sig") ?: "",
                 hiddenGroups = hidden,
+                showAdult = if (v("groups_present") != null) on("showadult") else Repo.showAdult,
+                hiddenVod = hiddenVod,
                 forceReload = v("reload") != null,
             )
         )
@@ -238,9 +245,30 @@ object ConfigServer {
             append("<div class='tools'><button type='button' onclick='setAll(true)'>Show all</button><button type='button' onclick='setAll(false)'>Hide all</button></div>")
             append("<div class='groups'>")
             for ((name, count) in groups) {
-                append("<label class='row'><input type='checkbox' name='g' value='${esc(name)}' ${checked(name !in hidden)}> ${esc(name)} <span class='muted'>$count</span></label>")
+                if (Repo.isAdult(name) && !Repo.showAdult) {
+                    append("<label class='row'><input type='checkbox' disabled> ${esc(name)} <span class='muted'>$count · adult, hidden</span></label>")
+                } else {
+                    append("<label class='row'><input type='checkbox' name='g' value='${esc(name)}' ${checked(name !in hidden)}> ${esc(name)} <span class='muted'>$count</span></label>")
+                }
             }
             append("</div>")
+        }
+        val (vodMovies, vodSeries) = Repo.vodCategoriesForSettings()
+        val hiddenVod = Repo.hiddenVod
+        fun vodRows(list: List<VodCategory>, key: String) = buildString {
+            for (c in list) {
+                val k = key + c.title
+                if (Repo.isAdult(c.title) && !Repo.showAdult) {
+                    append("<label class='row'><input type='checkbox' disabled> ${esc(c.title)} <span class='muted'>adult, hidden</span></label>")
+                } else {
+                    append("<label class='row'><input type='checkbox' name='vc' value='${esc(k)}' ${checked(k !in hiddenVod)}> ${esc(c.title)}</label>")
+                }
+            }
+        }
+        val vodSection = if (vodMovies.isEmpty() && vodSeries.isEmpty()) "" else buildString {
+            append("<input type='hidden' name='vod_present' value='1'>")
+            if (vodMovies.isNotEmpty()) append("<details><summary>Movie categories (${vodMovies.size})</summary><div class='groups'>${vodRows(vodMovies, "m:")}</div></details>")
+            if (vodSeries.isNotEmpty()) append("<details><summary>Series categories (${vodSeries.size})</summary><div class='groups'>${vodRows(vodSeries, "s:")}</div></details>")
         }
         return page(
             """
@@ -279,13 +307,11 @@ object ConfigServer {
 
               <h3>What your parents see</h3>
               <label class="row"><input type="checkbox" name="hidevod" ${checked(Repo.hideVod)}> Hide movies &amp; series</label>
+              <label class="row"><input type="checkbox" name="showadult" ${checked(Repo.showAdult)}> Show adult channels &amp; movies</label>
+              <p class="muted">Adult categories (XXX, 18+…) stay hidden unless this is ticked.</p>
               <p class="muted">Untick categories to hide them. Hidden channels disappear from lists and the guide; favorites still work.</p>
               $groupRows
-
-              <h3>Apps inside Zapper</h3>
-              <p class="muted">Ticked apps appear under 📱 Apps in the channel list, so nobody needs the Fire TV home screen.</p>
-              <input type="hidden" name="apps_present" value="1">
-              <div class="groups">${appRows()}</div>
+              $vodSection
 
               <h3>Advanced</h3>
               <details><summary>Box identity (only if your provider locked the MAC to a device)</summary>

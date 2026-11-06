@@ -97,6 +97,45 @@ object Repo {
     val vpnPackage: String get() = prefs.getString("vpnpkg", "")!!
     val hiddenGroups: Set<String>
         get() = prefs.getString("hidden", "")!!.split('\n').filter { it.isNotEmpty() }.toSet()
+    /** Adult categories (live, movies, series) are hidden unless this is ticked on the phone page. */
+    val showAdult: Boolean get() = prefs.getBoolean("showadult", false)
+    /** Movie/series categories hidden on the phone page, as "m:<title>" / "s:<title>". */
+    val hiddenVod: Set<String>
+        get() = prefs.getString("hiddenvod", "")!!.split('\n').filter { it.isNotEmpty() }.toSet()
+
+    private val adultWords = Regex(
+        "(?i)(?<![a-z])(xxx|adults?|18\\s*\\+|\\+\\s*18|porn\\w*|erotic\\w*|sexy?|playboy|hustler|brazzers|for adults|nsfw|hot ?club)(?![a-z])",
+    )
+
+    fun isAdult(name: String): Boolean = adultWords.containsMatchIn(name)
+
+    /** Live categories not shown on the TV: the ones unticked on the phone, plus adult ones unless allowed. */
+    val effectiveHidden: Set<String>
+        get() {
+            val h = hiddenGroups
+            if (showAdult) return h
+            val out = HashSet(h)
+            for (c in channels) if (!c.isVod && isAdult(c.group)) out.add(c.group)
+            return out
+        }
+
+    /** Whether a movie/series category should be listed on the TV. */
+    fun vodCategoryVisible(series: Boolean, title: String): Boolean =
+        (showAdult || !isAdult(title)) && (if (series) "s:" else "m:") + title !in hiddenVod
+
+    /** Movie and series categories, fetched once for the phone page. Background thread only. */
+    @Volatile private var vodCatsCache: Pair<List<VodCategory>, List<VodCategory>>? = null
+
+    fun vodCategoriesForSettings(): Pair<List<VodCategory>, List<VodCategory>> {
+        vodCatsCache?.let { return it }
+        val src = vod() ?: return emptyList<VodCategory>() to emptyList()
+        val m = try { src.categories(false) } catch (_: Exception) { return emptyList<VodCategory>() to emptyList() }
+        val s = try { if (src.hasSeriesSection) src.categories(true) else emptyList() } catch (_: Exception) { emptyList() }
+        val pair = m.filter { it.id != "*" } to s.filter { it.id != "*" }
+        vodCatsCache = pair
+        return pair
+    }
+
     /** Bumped when the playlist/EPG source changes (needs re-download). */
     val configVersion: Int get() = prefs.getInt("cfgver", 0)
     /** Bumped when only display settings change (no download). */
@@ -131,6 +170,8 @@ object Repo {
         val stbDeviceId2: String = Repo.stbDeviceId2,
         val stbSignature: String = Repo.stbSignature,
         val hiddenGroups: Set<String> = Repo.hiddenGroups,
+        val showAdult: Boolean = Repo.showAdult,
+        val hiddenVod: Set<String> = Repo.hiddenVod,
         val forceReload: Boolean = false,
     )
 
@@ -159,6 +200,8 @@ object Repo {
             .putString("stb_dev2", s.stbDeviceId2.trim())
             .putString("stb_sig", s.stbSignature.trim())
             .putString("hidden", s.hiddenGroups.joinToString("\n"))
+            .putBoolean("showadult", s.showAdult)
+            .putString("hiddenvod", s.hiddenVod.joinToString("\n"))
         if (sourceChanged || s.forceReload) e.putInt("cfgver", configVersion + 1)
         else e.putInt("dispver", displayVersion + 1)
         e.commit()
@@ -184,7 +227,7 @@ object Repo {
     /** Visible groups: Favorites, All channels, then playlist groups (minus hidden ones). */
     fun groups(): List<Group> {
         val all = channels
-        val hidden = hiddenGroups
+        val hidden = effectiveHidden
         val allLive = all.filter { !it.isVod }
         val live = allLive.filter { it.group !in hidden }
         // Number visible channels 1..N so the numbers stay small and gap-free.
@@ -200,7 +243,6 @@ object Repo {
             out.add(Group("🎬 Movies", emptyList(), Group.Kind.MOVIES))
             out.add(Group("📺 Series", emptyList(), Group.Kind.SERIES))
         }
-        out.add(Group("📱 Apps", emptyList(), Group.Kind.APPS))
         out.add(Group("❔ Help", emptyList(), Group.Kind.HELP))
         val liveGroups = LinkedHashMap<String, ArrayList<Channel>>()
         for (c in all) {
@@ -246,6 +288,7 @@ object Repo {
 
     /** @return error message or null */
     fun loadPlaylist(force: Boolean): String? {
+        vodCatsCache = null
         if (isPortal) return loadPortal()
         stalker = null
         val url = m3uUrl
@@ -290,10 +333,17 @@ object Repo {
     }
 
     /** Stream URL to play for a channel (asks the portal for a fresh link if needed). Background thread only. */
-    fun resolveStream(ch: Channel): String? {
+    fun resolveStream(ch: Channel, attempt: Int = 0): String? {
         val cmd = ch.cmd ?: return ch.url
         val c = stalker ?: return null
-        return try { c.createLink(cmd) } catch (_: Exception) { null }
+        // Links are tied to the address we signed in from: after two failures, sign in again.
+        if (attempt == 2) c.resetSession()
+        return try { c.createLink(cmd) } catch (e: Exception) { android.util.Log.w("Zapper", "create_link failed", e); null }
+    }
+
+    /** The network changed (VPN reconnected, new location, Wi-Fi back): the portal session is no longer valid. */
+    fun networkChanged() {
+        stalker?.resetSession()
     }
 
     /** Movies & series for the current source, or null if there are none. */
@@ -304,9 +354,10 @@ object Repo {
     }
 
     /** Stream URL for a movie/episode. Background thread only. */
-    fun vodLink(r: PlayRequest): String? {
+    fun vodLink(r: PlayRequest, attempt: Int = 0): String? {
         if (r.direct) return r.cmd
         val c = stalker ?: return null
+        if (attempt == 2) c.resetSession()
         return try { PortalVod.link(c, r) } catch (_: Exception) { null }
     }
 

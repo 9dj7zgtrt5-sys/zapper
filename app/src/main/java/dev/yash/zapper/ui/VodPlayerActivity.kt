@@ -58,7 +58,7 @@ class VodPlayerActivity : Activity(), TvPlayer.Callback {
 
         val ua = if (req.direct) Repo.userAgent else StalkerClient.UA
         val request = req
-        player.play(request.cmd, ua, live = false, startPositionMs = request.startPositionMs, resolver = { Repo.vodLink(request) })
+        player.play(request.cmd, ua, live = false, startPositionMs = request.startPositionMs, resolver = { attempt -> Repo.vodLink(request, attempt) })
         view.showController()
     }
 
@@ -91,7 +91,7 @@ class VodPlayerActivity : Activity(), TvPlayer.Callback {
     override fun onPlayerMessage(msg: String?) {
         if (msg == null) this.msg.visibility = View.GONE
         else {
-            this.msg.text = msg.replace("Press ▲ or ▼ to watch another channel.", "Press Back to choose something else.")
+            this.msg.text = (if (msg == dev.yash.zapper.player.TvPlayer.RECONNECTING) "Connecting…" else msg).replace("Press ▲ or ▼ to watch another channel.", "Press Back to choose something else.")
                 .replace("This channel isn't", "This video isn't")
             this.msg.visibility = View.VISIBLE
         }

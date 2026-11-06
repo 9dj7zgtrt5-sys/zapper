@@ -177,7 +177,7 @@ class VodActivity : Activity() {
         val list = ArrayList<VodCategory>()
         list.add(VodCategory(SEARCH, "🔍  Search"))
         if (ResumeStore.all().isNotEmpty()) list.add(VodCategory(CONTINUE, "▶  Continue watching"))
-        list.addAll(cats.map { VodCategory(it.id, Display.pretty(it.title)) })
+        list.addAll(cats.filter { it.id == "*" || Repo.vodCategoryVisible(series, it.title) }.map { VodCategory(it.id, Display.pretty(it.title)) })
         categories = list
         if (cats.isEmpty()) { showEmpty("Nothing here yet."); return }
         categoriesList.adapter = RowAdapter(list.map { it.title })

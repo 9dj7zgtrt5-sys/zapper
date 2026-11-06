@@ -283,11 +283,24 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
 
     // ---------------- VPN guard ----------------
 
+    private var netSignature: String? = null
+
     private val vpnWatch = object : Runnable {
         override fun run() {
+            checkNetwork()
             checkVpn()
             main.postDelayed(this, if (vpnBlocked) 1500 else 4000)
         }
+    }
+
+    /** A new VPN location or a Wi-Fi drop invalidates the portal session: sign in again and retry at once. */
+    private fun checkNetwork() {
+        val sig = Vpn.signature(this)
+        val old = netSignature
+        netSignature = sig
+        if (old == null || old == sig || sig.isEmpty()) return
+        Repo.networkChanged()
+        if (player.struggling && current != null && vodTitle == null && !vpnBlocked) player.retryNow()
     }
 
     private fun vpnOk(): Boolean = !Repo.requireVpn || Vpn.isActive(this) || Vpn.apps(this).isEmpty()
@@ -414,7 +427,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         needsResume = false
         channelAdapter.playingUrl = ch.url
         if (vpnBlocked) return
-        val resolver: (() -> String?)? = if (ch.cmd != null) ({ Repo.resolveStream(ch) }) else null
+        val resolver: ((Int) -> String?)? = if (ch.cmd != null) ({ attempt -> Repo.resolveStream(ch, attempt) }) else null
         player.play(ch.url, ch.userAgent ?: Repo.userAgent, live = true, resolver = resolver)
         Repo.lastChannelUrl = ch.url
         Repo.lastGroup = groups.getOrNull(groupIndex)?.title
@@ -438,8 +451,13 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
     }
 
     override fun onPlayerMessage(msg: String?) {
-        if (msg == null) playerMsg.visibility = View.GONE
-        else { playerMsg.text = msg; playerMsg.visibility = View.VISIBLE }
+        if (msg == null) { playerMsg.visibility = View.GONE; return }
+        playerMsg.text = when {
+            msg != TvPlayer.RECONNECTING -> msg
+            !Vpn.hasInternet(this) -> "No internet connection.\nWaiting for Wi-Fi…"
+            else -> "Connecting…"
+        }
+        playerMsg.visibility = View.VISIBLE
     }
 
     override fun onEnded() {
@@ -502,8 +520,8 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         }
         val ch = current ?: return
         infoNum.text = ch.number.toString()
-        infoName.text = Display.pretty(ch.name)
-        Logos.into(infoLogo, ch.logo)
+        infoName.text = Display.channelTitle(ch.name)
+        Logos.into(infoLogo, ch.logo, name = ch.name)
         val list = Repo.programmes(ch)
         val p = Epg.at(list, now)
         if (p != null) {
@@ -607,7 +625,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
 
     private fun toggleFavorite(ch: Channel) {
         val added = Repo.toggleFavorite(ch)
-        toast(if (added) "★ Added ${ch.name} to Favorites" else "Removed ${ch.name} from Favorites")
+        toast(if (added) "★ Added ${Display.channelName(ch.name)} to Favorites" else "Removed ${Display.channelName(ch.name)} from Favorites")
         groups = Repo.groups()
         groupAdapter.items = groups
         if (mode == Mode.LIST) showGroupContent(groups.getOrNull(browseGroup))
