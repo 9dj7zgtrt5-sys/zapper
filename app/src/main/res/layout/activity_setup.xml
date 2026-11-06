@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0D1014">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="48dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Zapper setup"
+                android:textColor="#FFFFFF"
+                android:textSize="30sp"
+                android:textStyle="bold" />
+
+            <TextView style="@style/Label" android:text="M3U playlist URL" />
+            <EditText android:id="@+id/m3uUrl" style="@style/Field" android:inputType="textUri" />
+
+            <TextView style="@style/Label" android:text="XMLTV EPG URL (optional, uses playlist's if blank)" />
+            <EditText android:id="@+id/epgUrl" style="@style/Field" android:inputType="textUri" />
+
+            <CheckBox android:id="@+id/autoStart" style="@style/TvCheck" android:text="Open Zapper when the TV turns on" />
+            <CheckBox android:id="@+id/requireVpn" style="@style/TvCheck" android:text="Only play when the VPN is connected" />
+            <CheckBox android:id="@+id/reverseZap" style="@style/TvCheck" android:text="Reverse up/down channel switching" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="28dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/saveButton"
+                    style="@style/TvButton"
+                    android:text="Save &amp; reload" />
+
+                <Button
+                    android:id="@+id/cancelButton"
+                    style="@style/TvButton"
+                    android:layout_marginStart="16dp"
+                    android:text="Cancel" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/phoneHint"
+            android:layout_width="320dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="48dp"
+            android:layout_marginTop="60dp"
+            android:background="@drawable/pill"
+            android:lineSpacingExtra="6dp"
+            android:padding="24dp"
+            android:textColor="#E8EAED"
+            android:textSize="20sp" />
+    </LinearLayout>
+</ScrollView>

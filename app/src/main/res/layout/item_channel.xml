@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="84dp"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="16dp"
+    android:paddingEnd="20dp">
+
+    <TextView
+        android:id="@+id/chNum"
+        android:layout_width="56dp"
+        android:layout_height="wrap_content"
+        android:textColor="#9AA0A6"
+        android:textSize="19sp" />
+
+    <ImageView
+        android:id="@+id/chLogo"
+        android:layout_width="76dp"
+        android:layout_height="48dp"
+        android:layout_marginEnd="14dp"
+        android:scaleType="fitCenter" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/chName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#FFFFFF"
+            android:textSize="23sp" />
+
+        <TextView
+            android:id="@+id/chNow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#AEB4BA"
+            android:textSize="18sp" />
+
+        <ProgressBar
+            android:id="@+id/chProgress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="4dp"
+            android:layout_marginTop="4dp"
+            android:max="1000"
+            android:progressDrawable="@drawable/progress" />
+    </LinearLayout>
+</LinearLayout>

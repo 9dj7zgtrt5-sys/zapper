@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/playerView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:focusable="false"
+        app:use_controller="false"
+        app:show_buffering="when_playing"
+        app:surface_type="surface_view" />
+
+    <!-- Problems with the current stream -->
+    <TextView
+        android:id="@+id/playerMsg"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="@drawable/pill"
+        android:gravity="center"
+        android:lineSpacingExtra="6dp"
+        android:padding="28dp"
+        android:textColor="#FFFFFF"
+        android:textSize="24sp"
+        android:visibility="gone" />
+
+    <!-- Channel info banner -->
+    <LinearLayout
+        android:id="@+id/infoBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="@drawable/info_gradient"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="48dp"
+        android:paddingEnd="48dp"
+        android:paddingTop="56dp"
+        android:paddingBottom="32dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/infoNum"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="72dp"
+            android:textColor="#8AB4F8"
+            android:textSize="36sp"
+            android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/infoLogo"
+            android:layout_width="112dp"
+            android:layout_height="72dp"
+            android:layout_marginEnd="24dp"
+            android:scaleType="fitCenter" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/infoName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#FFFFFF"
+                android:textSize="30sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/infoNow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#E8EAED"
+                android:textSize="22sp" />
+
+            <ProgressBar
+                android:id="@+id/infoProgress"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="6dp"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="8dp"
+                android:max="1000"
+                android:progressDrawable="@drawable/progress" />
+
+            <TextView
+                android:id="@+id/infoNext"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#9AA0A6"
+                android:textSize="19sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/infoClock"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top"
+            android:layout_marginStart="24dp"
+            android:textColor="#FFFFFF"
+            android:textSize="26sp" />
+    </LinearLayout>
+
+    <!-- Categories + channel list -->
+    <LinearLayout
+        android:id="@+id/listPanel"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:background="#F00D1014"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="horizontal">
+
+            <ListView
+                android:id="@+id/groupsList"
+                android:layout_width="290dp"
+                android:layout_height="match_parent"
+                android:background="#FF080A0D"
+                android:clipToPadding="false"
+                android:divider="@null"
+                android:listSelector="@drawable/list_selector"
+                android:paddingTop="20dp"
+                android:paddingBottom="20dp"
+                android:scrollbars="none" />
+
+            <ListView
+                android:id="@+id/channelsList"
+                android:layout_width="590dp"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:divider="@null"
+                android:listSelector="@drawable/list_selector"
+                android:paddingTop="20dp"
+                android:paddingBottom="20dp"
+                android:scrollbars="none" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/listHint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#FF080A0D"
+            android:paddingStart="24dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="14dp"
+            android:text="OK  Watch      ◀  Categories      ▶  TV guide      ☰  Add / remove ★      Back  Close"
+            android:textColor="#C8CCD0"
+            android:textSize="17sp" />
+    </LinearLayout>
+
+    <dev.yash.zapper.ui.GuideView
+        android:id="@+id/guide"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
+    <!-- Help screen (☰ while watching) -->
+    <LinearLayout
+        android:id="@+id/help"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#F20D1014"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="28dp"
+            android:text="How to use the remote"
+            android:textColor="#FFFFFF"
+            android:textSize="34sp"
+            android:textStyle="bold" />
+
+        <TableLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+            <TableRow android:paddingTop="8dp" android:paddingBottom="8dp">
+                <TextView android:text="▲  ▼" android:minWidth="120dp" android:textColor="#8AB4F8" android:textSize="26sp" android:textStyle="bold" />
+                <TextView android:text="Change channel" android:textColor="#E8EAED" android:textSize="26sp" />
+            </TableRow>
+            <TableRow android:paddingTop="8dp" android:paddingBottom="8dp">
+                <TextView android:text="OK" android:minWidth="120dp" android:textColor="#8AB4F8" android:textSize="26sp" android:textStyle="bold" />
+                <TextView android:text="See all channels" android:textColor="#E8EAED" android:textSize="26sp" />
+            </TableRow>
+            <TableRow android:paddingTop="8dp" android:paddingBottom="8dp">
+                <TextView android:text="▶" android:minWidth="120dp" android:textColor="#8AB4F8" android:textSize="26sp" android:textStyle="bold" />
+                <TextView android:text="TV guide: what is on now and later" android:textColor="#E8EAED" android:textSize="26sp" />
+            </TableRow>
+            <TableRow android:paddingTop="8dp" android:paddingBottom="8dp">
+                <TextView android:text="◀" android:minWidth="120dp" android:textColor="#8AB4F8" android:textSize="26sp" android:textStyle="bold" />
+                <TextView android:text="Go back to the previous channel" android:textColor="#E8EAED" android:textSize="26sp" />
+            </TableRow>
+            <TableRow android:paddingTop="8dp" android:paddingBottom="8dp">
+                <TextView android:text="Back" android:minWidth="120dp" android:textColor="#8AB4F8" android:textSize="26sp" android:textStyle="bold" />
+                <TextView android:text="Close a menu" android:textColor="#E8EAED" android:textSize="26sp" />
+            </TableRow>
+            <TableRow android:paddingTop="8dp" android:paddingBottom="8dp">
+                <TextView android:text="☰" android:minWidth="120dp" android:textColor="#8AB4F8" android:textSize="26sp" android:textStyle="bold" />
+                <TextView android:text="In the channel list: add to Favorites ★" android:textColor="#E8EAED" android:textSize="26sp" />
+            </TableRow>
+        </TableLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="36dp"
+            android:background="@drawable/pill"
+            android:paddingStart="24dp"
+            android:paddingTop="10dp"
+            android:paddingEnd="24dp"
+            android:paddingBottom="10dp"
+            android:text="Press any button to continue"
+            android:textColor="#8AB4F8"
+            android:textSize="20sp" />
+    </LinearLayout>
+
+    <!-- Full-screen message card: welcome, loading, VPN off, errors -->
+    <LinearLayout
+        android:id="@+id/card"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#FF0D1014"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="64dp"
+        android:visibility="gone">
+
+        <ProgressBar
+            android:id="@+id/cardSpinner"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginBottom="24dp"
+            android:indeterminate="true" />
+
+        <TextView
+            android:id="@+id/cardTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#FFFFFF"
+            android:textSize="36sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/cardBody"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:gravity="center"
+            android:lineSpacingExtra="8dp"
+            android:textColor="#C8CCD0"
+            android:textSize="24sp" />
+
+        <TextView
+            android:id="@+id/cardButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="36dp"
+            android:background="@drawable/primary_pill"
+            android:paddingStart="36dp"
+            android:paddingTop="14dp"
+            android:paddingEnd="36dp"
+            android:paddingBottom="14dp"
+            android:textColor="#FFFFFF"
+            android:textSize="24sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+</FrameLayout>

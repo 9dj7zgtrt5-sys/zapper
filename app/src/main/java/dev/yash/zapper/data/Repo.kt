@@ -1,0 +1,223 @@
+package dev.yash.zapper.data
+
+import android.content.Context
+import android.content.SharedPreferences
+import android.os.Handler
+import android.os.Looper
+import java.io.File
+import java.security.MessageDigest
+import java.util.concurrent.Executors
+
+/** App-wide state: settings, playlist, EPG and favorites. */
+object Repo {
+    private const val STALE_MS = 12 * TimeUtil.HOUR
+    const val DEFAULT_UA = "Zapper/1.0 (Linux; Android)"
+
+    private lateinit var prefs: SharedPreferences
+    private lateinit var dir: File
+    val io = Executors.newSingleThreadExecutor()
+    val main = Handler(Looper.getMainLooper())
+
+    @Volatile var channels: List<Channel> = emptyList(); private set
+    @Volatile private var playlistEpgUrls: List<String> = emptyList()
+    /** channel url -> programmes */
+    @Volatile var epg: Map<String, List<Programme>> = emptyMap(); private set
+
+    private val favorites = ArrayList<String>()
+
+    fun init(ctx: Context) {
+        if (::prefs.isInitialized) return
+        prefs = ctx.getSharedPreferences("zapper", Context.MODE_PRIVATE)
+        dir = File(ctx.filesDir, "cache").apply { mkdirs() }
+        favorites.clear()
+        prefs.getString("favorites", "")!!.split('\n').filter { it.isNotEmpty() }.forEach { favorites.add(it) }
+    }
+
+    // ---- settings ----
+    val m3uUrl: String get() = prefs.getString("m3u", "")!!
+    val epgUrl: String get() = prefs.getString("epg", "")!!
+    val userAgent: String get() = prefs.getString("ua", "")!!.ifBlank { DEFAULT_UA }
+    val customUserAgent: String get() = prefs.getString("ua", "")!!
+    val tzOffsetHours: Float get() = prefs.getFloat("tz", 0f)
+    val tzOffsetMs: Long get() = (tzOffsetHours * TimeUtil.HOUR).toLong()
+    val reverseZap: Boolean get() = prefs.getBoolean("reverse", false)
+    val autoStart: Boolean get() = prefs.getBoolean("autostart", true)
+    val requireVpn: Boolean get() = prefs.getBoolean("requirevpn", true)
+    val hideVod: Boolean get() = prefs.getBoolean("hidevod", false)
+    val vpnPackage: String get() = prefs.getString("vpnpkg", "")!!
+    val hiddenGroups: Set<String>
+        get() = prefs.getString("hidden", "")!!.split('\n').filter { it.isNotEmpty() }.toSet()
+    /** Bumped when the playlist/EPG source changes (needs re-download). */
+    val configVersion: Int get() = prefs.getInt("cfgver", 0)
+    /** Bumped when only display settings change (no download). */
+    val displayVersion: Int get() = prefs.getInt("dispver", 0)
+    var helpShown: Boolean
+        get() = prefs.getBoolean("helpshown", false)
+        set(v) { prefs.edit().putBoolean("helpshown", v).apply() }
+
+    class Settings(
+        val m3u: String = m3uUrl,
+        val epg: String = epgUrl,
+        val ua: String = customUserAgent,
+        val tz: Float = tzOffsetHours,
+        val reverse: Boolean = reverseZap,
+        val autoStart: Boolean = Repo.autoStart,
+        val requireVpn: Boolean = Repo.requireVpn,
+        val hideVod: Boolean = Repo.hideVod,
+        val vpnPackage: String = Repo.vpnPackage,
+        val hiddenGroups: Set<String> = Repo.hiddenGroups,
+        val forceReload: Boolean = false,
+    )
+
+    @Synchronized
+    fun saveConfig(s: Settings) {
+        val sourceChanged = s.m3u.trim() != m3uUrl || s.epg.trim() != epgUrl || s.ua.trim() != customUserAgent
+        val e = prefs.edit()
+            .putString("m3u", s.m3u.trim())
+            .putString("epg", s.epg.trim())
+            .putString("ua", s.ua.trim())
+            .putFloat("tz", s.tz)
+            .putBoolean("reverse", s.reverse)
+            .putBoolean("autostart", s.autoStart)
+            .putBoolean("requirevpn", s.requireVpn)
+            .putBoolean("hidevod", s.hideVod)
+            .putString("vpnpkg", s.vpnPackage)
+            .putString("hidden", s.hiddenGroups.joinToString("\n"))
+        if (sourceChanged || s.forceReload) e.putInt("cfgver", configVersion + 1)
+        else e.putInt("dispver", displayVersion + 1)
+        e.commit()
+    }
+
+    var lastChannelUrl: String?
+        get() = prefs.getString("last_url", null)
+        set(v) { prefs.edit().putString("last_url", v).apply() }
+    var lastGroup: String?
+        get() = prefs.getString("last_group", null)
+        set(v) { prefs.edit().putString("last_group", v).apply() }
+
+    // ---- favorites ----
+    fun isFavorite(ch: Channel) = favorites.contains(ch.url)
+
+    fun toggleFavorite(ch: Channel): Boolean {
+        val added = if (favorites.remove(ch.url)) false else { favorites.add(ch.url); true }
+        prefs.edit().putString("favorites", favorites.joinToString("\n")).apply()
+        return added
+    }
+
+    // ---- groups ----
+    /** Visible groups: Favorites, All channels, then playlist groups (minus hidden ones). */
+    fun groups(): List<Group> {
+        val all = channels
+        val hidden = hiddenGroups
+        val allLive = all.filter { !it.isVod }
+        val live = allLive.filter { it.group !in hidden }
+        // Number visible channels 1..N so the numbers stay small and gap-free.
+        var n = 0
+        for (c in live) c.number = ++n
+        val byUrl = HashMap<String, Channel>()
+        for (c in allLive) if (!byUrl.containsKey(c.url)) byUrl[c.url] = c
+        val out = ArrayList<Group>()
+        out.add(Group("★ Favorites", favorites.mapNotNull { byUrl[it] }, Group.Kind.FAVORITES))
+        out.add(Group("All channels", live, Group.Kind.ALL))
+        val liveGroups = LinkedHashMap<String, ArrayList<Channel>>()
+        val vodGroups = LinkedHashMap<String, ArrayList<Channel>>()
+        for (c in all) {
+            if (c.group in hidden || (c.isVod && hideVod)) continue
+            (if (c.isVod) vodGroups else liveGroups).getOrPut(c.group) { ArrayList() }.add(c)
+        }
+        for ((k, v) in liveGroups) out.add(Group(k, v, Group.Kind.LIVE))
+        for ((k, v) in vodGroups) out.add(Group("▶ $k", v, Group.Kind.VOD))
+        return out
+    }
+
+    /** All group names in the playlist with channel counts (for the phone settings page). */
+    fun allGroupNames(): List<Pair<String, Int>> {
+        val m = LinkedHashMap<String, Int>()
+        for (c in channels) m[c.group] = (m[c.group] ?: 0) + 1
+        return m.toList()
+    }
+
+    val epgChannelCount: Int get() = epg.size
+
+    fun programmes(ch: Channel): List<Programme> = epg[ch.url] ?: emptyList()
+
+    val maxCatchupDays: Int get() = channels.maxOfOrNull { it.catchup?.days ?: 0 } ?: 0
+
+    // ---- loading (call on io thread) ----
+    private fun cacheFile(prefix: String, url: String): File {
+        val md = MessageDigest.getInstance("MD5").digest(url.toByteArray())
+        return File(dir, prefix + "_" + md.joinToString("") { "%02x".format(it) })
+    }
+
+    /** Returns a usable local copy, downloading if missing/stale/forced. Throws if nothing usable. */
+    private fun fetch(prefix: String, url: String, force: Boolean): File {
+        val f = cacheFile(prefix, url)
+        val fresh = f.exists() && System.currentTimeMillis() - f.lastModified() < STALE_MS
+        if (force || !fresh) {
+            try {
+                Http.download(url, userAgent, f)
+            } catch (e: Exception) {
+                if (!f.exists()) throw e
+            }
+        }
+        return f
+    }
+
+    /** @return error message or null */
+    fun loadPlaylist(force: Boolean): String? {
+        val url = m3uUrl
+        if (url.isBlank()) return "No playlist URL set"
+        return try {
+            val f = fetch("m3u", url, force)
+            val pl = Http.openMaybeGzip(f).use { M3uParser.parse(it) }
+            channels = pl.channels
+            playlistEpgUrls = pl.epgUrls
+            dir.listFiles()?.filter { it.name.startsWith("m3u_") && it != f }?.forEach { it.delete() }
+            if (pl.channels.isEmpty()) "Playlist has no channels" else null
+        } catch (e: Exception) {
+            "Playlist failed: ${e.message ?: e.javaClass.simpleName}"
+        }
+    }
+
+    fun loadEpg(force: Boolean): String? {
+        val urls = epgUrl.split(',', ' ', '\n').map { it.trim() }.filter { it.isNotEmpty() }
+            .ifEmpty { playlistEpgUrls }
+        if (urls.isEmpty()) return null
+        val live = channels.filter { !it.isVod }
+        val wantedIds = live.mapNotNull { it.tvgId?.lowercase() }.toHashSet()
+        val wantedNames = HashSet<String>()
+        for (c in live) {
+            c.tvgName?.let { wantedNames.add(XmlTvParser.norm(it)) }
+            wantedNames.add(XmlTvParser.norm(c.name))
+        }
+        val now = System.currentTimeMillis()
+        val from = now - maxOf(maxCatchupDays * TimeUtil.DAY, 6 * TimeUtil.HOUR)
+        val to = now + 4 * TimeUtil.DAY
+
+        val merged = HashMap<String, List<Programme>>()
+        var error: String? = null
+        val keep = HashSet<File>()
+        for (u in urls) {
+            try {
+                val f = fetch("epg", u, force)
+                keep.add(f)
+                val parsed = Http.openMaybeGzip(f).use { XmlTvParser.parse(it, wantedIds, wantedNames, from, to) }
+                for (c in live) {
+                    if (merged.containsKey(c.url)) continue
+                    val id = c.tvgId?.lowercase()?.takeIf { parsed.programmes.containsKey(it) }
+                        ?: c.tvgName?.let { parsed.nameToId[XmlTvParser.norm(it)] }
+                        ?: parsed.nameToId[XmlTvParser.norm(c.name)]
+                    val list = id?.let { parsed.programmes[it] }
+                    if (!list.isNullOrEmpty()) merged[c.url] = list
+                }
+            } catch (e: Exception) {
+                error = "EPG failed: ${e.message ?: e.javaClass.simpleName}"
+            } catch (e: OutOfMemoryError) {
+                error = "EPG too large for this device"
+            }
+        }
+        dir.listFiles()?.filter { it.name.startsWith("epg_") && it !in keep && !it.name.endsWith(".part") }?.forEach { it.delete() }
+        epg = merged
+        return error
+    }
+}
