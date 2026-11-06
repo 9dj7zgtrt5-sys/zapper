@@ -27,29 +27,40 @@ jobs:
           ./gradlew assembleRelease --no-daemon --stacktrace
           cp app/build/outputs/apk/release/app-release.apk zapper.apk
 
+      - name: Build TV home screen (CleanYourTV launcher)
+        run: |
+          cd tvhome
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --console=plain
+          cp app/build/outputs/apk/release/app-release.apk ../tvhome.apk
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: zapper-apk
-          path: zapper.apk
+          path: |
+            zapper.apk
+            tvhome.apk
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
           name: Zapper build ${{ github.run_number }}
-          files: zapper.apk
+          files: |
+            zapper.apk
+            tvhome.apk
           make_latest: true
 
       # Mirror the APK to an "apk" branch so it can also be downloaded through the jsDelivr CDN
       # (https://cdn.jsdelivr.net/gh/<owner>/<repo>@apk/zapper.apk) when GitHub downloads are blocked.
       - name: Publish CDN mirror
         run: |
-          mkdir mirror && cp zapper.apk mirror/ && cd mirror
+          mkdir mirror && cp zapper.apk tvhome.apk mirror/ && cd mirror
           git init -q -b apk
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          git add zapper.apk
+          git add zapper.apk tvhome.apk
           git commit -qm "APK build ${{ github.run_number }}"
           git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" apk
           curl -s "https://purge.jsdelivr.net/gh/${{ github.repository }}@apk/zapper.apk" || true
