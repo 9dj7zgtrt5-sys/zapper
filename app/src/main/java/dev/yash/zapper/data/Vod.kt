@@ -5,7 +5,8 @@ import org.json.JSONObject
 
 class VodCategory(val id: String, val title: String)
 
-class VodPage(val items: List<VodItem>, val pages: Int)
+/** @param total number of titles across all pages, or -1 if the source doesn't say */
+class VodPage(val items: List<VodItem>, val pages: Int, val total: Int = -1)
 
 class VodItem(
     val id: String,
@@ -47,6 +48,9 @@ interface VodSource {
     val hasSeriesSection: Boolean
     fun categories(series: Boolean): List<VodCategory>
     fun page(series: Boolean, category: VodCategory, page: Int): VodPage
+    fun search(series: Boolean, query: String, page: Int): VodPage
+    /** Total titles, or null if unknown. */
+    fun total(series: Boolean): Int?
     fun seasons(item: VodItem): List<Season>
     fun episodes(item: VodItem, season: Season): List<Episode>
     fun movieRequest(item: VodItem): PlayRequest?
@@ -66,6 +70,15 @@ class PortalVod(private val c: StalkerClient) : VodSource {
 
     override fun page(series: Boolean, category: VodCategory, page: Int): VodPage =
         c.vodPage(if (series) "series" else "vod", category.id, page)
+
+    override fun search(series: Boolean, query: String, page: Int): VodPage =
+        c.vodPage(if (series && hasSeriesSection) "series" else "vod", "*", page, query)
+
+    override fun total(series: Boolean): Int? {
+        if (series && !hasSeriesSection) return null
+        val t = c.vodPage(if (series) "series" else "vod", "*", 1).total
+        return if (t > 0) t else null
+    }
 
     override fun seasons(item: VodItem) = c.seasons(item)
     override fun episodes(item: VodItem, season: Season) = c.episodes(item, season)
@@ -130,6 +143,15 @@ class M3uVod(all: List<Channel>) : VodSource {
         }
         return VodPage(items, 1)
     }
+
+    override fun search(series: Boolean, query: String, page: Int): VodPage {
+        val q = query.trim().lowercase()
+        val all = this.page(series, VodCategory("*", "All"), 1).items
+        return VodPage(all.filter { it.title.lowercase().contains(q) }, 1)
+    }
+
+    override fun total(series: Boolean): Int? =
+        if (series) episodes.map { it.show }.distinct().size else movies.size
 
     override fun seasons(item: VodItem): List<Season> {
         val show = item.id.removePrefix("m3u:")

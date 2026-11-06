@@ -25,7 +25,7 @@
         android:gravity="center"
         android:lineSpacingExtra="6dp"
         android:padding="28dp"
-        android:textColor="#FFFFFF"
+        android:textColor="@color/text"
         android:textSize="24sp"
         android:visibility="gone" />
 
@@ -49,7 +49,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:minWidth="72dp"
-            android:textColor="#8AB4F8"
+            android:textColor="@color/focus"
             android:textSize="36sp"
             android:textStyle="bold" />
 
@@ -72,7 +72,7 @@
                 android:layout_height="wrap_content"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:textColor="#FFFFFF"
+                android:textColor="@color/text"
                 android:textSize="30sp"
                 android:textStyle="bold" />
 
@@ -83,7 +83,7 @@
                 android:layout_marginTop="4dp"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:textColor="#E8EAED"
+                android:textColor="@color/text"
                 android:textSize="22sp" />
 
             <ProgressBar
@@ -102,7 +102,7 @@
                 android:layout_height="wrap_content"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:textColor="#9AA0A6"
+                android:textColor="@color/text2"
                 android:textSize="19sp" />
         </LinearLayout>
 
@@ -112,7 +112,7 @@
             android:layout_height="wrap_content"
             android:layout_gravity="top"
             android:layout_marginStart="24dp"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/text"
             android:textSize="26sp" />
     </LinearLayout>
 
@@ -121,9 +121,39 @@
         android:id="@+id/listPanel"
         android:layout_width="wrap_content"
         android:layout_height="match_parent"
-        android:background="#F00D1014"
+        android:background="#F510141F"
         android:orientation="vertical"
         android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="880dp"
+            android:layout_height="wrap_content"
+            android:background="@color/ink_deep"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="30dp"
+            android:paddingTop="22dp"
+            android:paddingEnd="30dp"
+            android:paddingBottom="14dp">
+
+            <TextView
+                android:id="@+id/panelTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Channels"
+                android:textColor="@color/text"
+                android:textSize="28sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/panelClock"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:tag="medium"
+                android:textColor="@color/text2"
+                android:textSize="22sp" />
+        </LinearLayout>
 
         <LinearLayout
             android:layout_width="wrap_content"
@@ -135,7 +165,7 @@
                 android:id="@+id/groupsList"
                 android:layout_width="290dp"
                 android:layout_height="match_parent"
-                android:background="#FF080A0D"
+                android:background="@color/ink_deep"
                 android:clipToPadding="false"
                 android:divider="@null"
                 android:listSelector="@drawable/list_selector"
@@ -165,7 +195,7 @@
                     android:gravity="center"
                     android:lineSpacingExtra="8dp"
                     android:padding="40dp"
-                    android:textColor="#C8CCD0"
+                    android:textColor="@color/text2"
                     android:textSize="24sp"
                     android:visibility="gone" />
             </FrameLayout>
@@ -175,12 +205,11 @@
             android:id="@+id/listHint"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="#FF080A0D"
-            android:paddingStart="24dp"
-            android:paddingTop="12dp"
-            android:paddingBottom="14dp"
-            android:text="OK  Watch      ◀  Categories      ▶  TV guide      ☰  Add / remove ★      Back  Close"
-            android:textColor="#C8CCD0"
+            android:background="@color/ink_deep"
+            android:paddingStart="30dp"
+            android:paddingTop="14dp"
+            android:paddingBottom="16dp"
+            android:textColor="@color/text2"
             android:textSize="17sp" />
     </LinearLayout>
 
@@ -195,7 +224,7 @@
         android:id="@+id/help"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#F20D1014"
+        android:background="#F510141F"
         android:gravity="center"
         android:orientation="vertical"
         android:visibility="gone">
@@ -205,7 +234,7 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="28dp"
             android:text="How to use the remote"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/text"
             android:textSize="34sp"
             android:textStyle="bold" />
 
@@ -213,32 +242,32 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content">
             <TableRow android:paddingTop="8dp" android:paddingBottom="8dp">
-                <TextView android:text="▲  ▼" android:minWidth="120dp" android:textColor="#8AB4F8" android:textSize="26sp" android:textStyle="bold" />
-                <TextView android:text="Change channel" android:textColor="#E8EAED" android:textSize="26sp" />
+                <TextView android:text="▲  ▼" android:minWidth="120dp" android:textColor="@color/focus" android:textSize="26sp" android:textStyle="bold" />
+                <TextView android:text="Change channel" android:textColor="@color/text" android:textSize="26sp" />
             </TableRow>
             <TableRow android:paddingTop="8dp" android:paddingBottom="8dp">
-                <TextView android:text="OK" android:minWidth="120dp" android:textColor="#8AB4F8" android:textSize="26sp" android:textStyle="bold" />
-                <TextView android:text="See all channels" android:textColor="#E8EAED" android:textSize="26sp" />
+                <TextView android:text="OK" android:minWidth="120dp" android:textColor="@color/focus" android:textSize="26sp" android:textStyle="bold" />
+                <TextView android:text="See all channels" android:textColor="@color/text" android:textSize="26sp" />
             </TableRow>
             <TableRow android:paddingTop="8dp" android:paddingBottom="8dp">
-                <TextView android:text="▶" android:minWidth="120dp" android:textColor="#8AB4F8" android:textSize="26sp" android:textStyle="bold" />
-                <TextView android:text="TV guide: what is on now and later" android:textColor="#E8EAED" android:textSize="26sp" />
+                <TextView android:text="▶" android:minWidth="120dp" android:textColor="@color/focus" android:textSize="26sp" android:textStyle="bold" />
+                <TextView android:text="TV guide: what is on now and later" android:textColor="@color/text" android:textSize="26sp" />
             </TableRow>
             <TableRow android:paddingTop="8dp" android:paddingBottom="8dp">
-                <TextView android:text="◀" android:minWidth="120dp" android:textColor="#8AB4F8" android:textSize="26sp" android:textStyle="bold" />
-                <TextView android:text="Go back to the previous channel" android:textColor="#E8EAED" android:textSize="26sp" />
+                <TextView android:text="◀" android:minWidth="120dp" android:textColor="@color/focus" android:textSize="26sp" android:textStyle="bold" />
+                <TextView android:text="Go back to the previous channel" android:textColor="@color/text" android:textSize="26sp" />
             </TableRow>
             <TableRow android:paddingTop="8dp" android:paddingBottom="8dp">
-                <TextView android:text="🎬" android:minWidth="120dp" android:textColor="#8AB4F8" android:textSize="26sp" android:textStyle="bold" />
-                <TextView android:text="Movies &amp; Series: press OK, then pick them at the top of the list" android:textColor="#E8EAED" android:textSize="26sp" />
+                <TextView android:text="🎬" android:minWidth="120dp" android:textColor="@color/focus" android:textSize="26sp" android:textStyle="bold" />
+                <TextView android:text="Movies &amp; Series: press OK, then pick them at the top of the list" android:textColor="@color/text" android:textSize="26sp" />
             </TableRow>
             <TableRow android:paddingTop="8dp" android:paddingBottom="8dp">
-                <TextView android:text="Back" android:minWidth="120dp" android:textColor="#8AB4F8" android:textSize="26sp" android:textStyle="bold" />
-                <TextView android:text="Close a menu" android:textColor="#E8EAED" android:textSize="26sp" />
+                <TextView android:text="Back" android:minWidth="120dp" android:textColor="@color/focus" android:textSize="26sp" android:textStyle="bold" />
+                <TextView android:text="Close a menu" android:textColor="@color/text" android:textSize="26sp" />
             </TableRow>
             <TableRow android:paddingTop="8dp" android:paddingBottom="8dp">
-                <TextView android:text="☰" android:minWidth="120dp" android:textColor="#8AB4F8" android:textSize="26sp" android:textStyle="bold" />
-                <TextView android:text="In the channel list: add to Favorites ★" android:textColor="#E8EAED" android:textSize="26sp" />
+                <TextView android:text="☰" android:minWidth="120dp" android:textColor="@color/focus" android:textSize="26sp" android:textStyle="bold" />
+                <TextView android:text="In the channel list: add to Favorites ★" android:textColor="@color/text" android:textSize="26sp" />
             </TableRow>
         </TableLayout>
 
@@ -247,7 +276,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
-            android:textColor="#AEB4BA"
+            android:textColor="@color/text2"
             android:textSize="20sp" />
 
         <TextView
@@ -260,7 +289,7 @@
             android:paddingEnd="24dp"
             android:paddingBottom="10dp"
             android:text="Press any button to continue"
-            android:textColor="#8AB4F8"
+            android:textColor="@color/focus"
             android:textSize="20sp" />
     </LinearLayout>
 
@@ -269,7 +298,7 @@
         android:id="@+id/card"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#FF0D1014"
+        android:background="@color/ink"
         android:gravity="center"
         android:orientation="vertical"
         android:padding="64dp"
@@ -287,7 +316,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:gravity="center"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/text"
             android:textSize="36sp"
             android:textStyle="bold" />
 
@@ -298,7 +327,7 @@
             android:layout_marginTop="18dp"
             android:gravity="center"
             android:lineSpacingExtra="8dp"
-            android:textColor="#C8CCD0"
+            android:textColor="@color/text2"
             android:textSize="24sp" />
 
         <TextView
@@ -311,7 +340,7 @@
             android:paddingTop="14dp"
             android:paddingEnd="36dp"
             android:paddingBottom="14dp"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/on_focus"
             android:textSize="24sp"
             android:textStyle="bold" />
     </LinearLayout>

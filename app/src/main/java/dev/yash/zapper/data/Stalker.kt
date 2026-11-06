@@ -350,10 +350,11 @@ class StalkerClient(
         return out
     }
 
-    fun vodPage(type: String, category: String, page: Int): VodPage {
+    fun vodPage(type: String, category: String, page: Int, search: String? = null): VodPage {
         val js = call(
             "type=$type&action=get_ordered_list&category=${URLEncoder.encode(category, "UTF-8")}" +
-                "&genre=*&p=$page&sortby=added&fav=0&hd=0&not_ended=0&abc=*&years=*",
+                "&genre=*&p=$page&sortby=added&fav=0&hd=0&not_ended=0&abc=*&years=*" +
+                (search?.let { "&search=" + URLEncoder.encode(it, "UTF-8") } ?: ""),
         ).optJSONObject("js") ?: return VodPage(emptyList(), 0)
         val total = js.optInt("total_items", 0)
         val perPage = js.optInt("max_page_items", 14).coerceAtLeast(1)
@@ -363,7 +364,7 @@ class StalkerClient(
             val items = ArrayList<VodItem>()
             val d = js.optJSONArray("data") ?: JSONArray()
             for (i in 0 until d.length()) d.optJSONObject(i)?.let { items.add(vodItem(it, type)) }
-            return VodPage(items, if (dataLen >= perPage || dataLen >= 10) page + 1 else page)
+            return VodPage(items, if (dataLen >= perPage || dataLen >= 10) page + 1 else page, -1)
         }
         val data = js.optJSONArray("data") ?: JSONArray()
         val items = ArrayList<VodItem>()
@@ -371,7 +372,7 @@ class StalkerClient(
             val o = data.optJSONObject(i) ?: continue
             items.add(vodItem(o, type))
         }
-        return VodPage(items, (total + perPage - 1) / perPage)
+        return VodPage(items, (total + perPage - 1) / perPage, total)
     }
 
     private fun vodItem(o: JSONObject, type: String): VodItem {

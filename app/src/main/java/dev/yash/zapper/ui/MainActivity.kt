@@ -86,6 +86,10 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         if (Repo.autoStart) WakeService.start(this)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_main)
+        Fonts.apply(window.decorView)
+        findViewById<TextView>(R.id.listHint).text = Display.hints(
+            "OK" to "Watch", "◀" to "Categories", "▶" to "TV guide", "☰" to "Add to favorites", "Back" to "Close",
+        )
         timeFmt = android.text.format.DateFormat.getTimeFormat(this)
 
         val pv = findViewById<PlayerView>(R.id.playerView)
@@ -147,6 +151,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
     private val applyGroup = Runnable {
         if (pendingGroup != browseGroup || channelAdapter.items !== groups.getOrNull(pendingGroup)?.channels) {
             browseGroup = pendingGroup
+            groupAdapter.activeIndex = browseGroup
             channelAdapter.items = groups.getOrNull(browseGroup)?.channels ?: emptyList()
             updateEmptyHint()
             val idx = channelAdapter.items.indexOfFirst { it.url == current?.url }
@@ -328,11 +333,26 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
             ?: groups.getOrNull(1)?.channels?.firstOrNull()?.also { gi = 1 }
         browseGroup = gi
         if (ch != null && vodTitle == null && !vpnBlocked) playChannel(ch, gi)
+        loadVodCounts()
         if (!Repo.helpShown) {
             Repo.helpShown = true
             main.postDelayed({ if (cardKind == Card.NONE) showHelp() }, 1500)
         }
         proceed()
+    }
+
+    /** Fills in the Movies / Series totals shown in the category list (best effort, in the background). */
+    private fun loadVodCounts() {
+        val src = Repo.vod() ?: return
+        VodSession.exec.execute {
+            val m = try { src.total(false) } catch (_: Exception) { null }
+            val sr = try { src.total(true) } catch (_: Exception) { null }
+            main.post {
+                groupAdapter.movieCount = m
+                groupAdapter.seriesCount = sr
+                groupAdapter.notifyDataSetChanged()
+            }
+        }
     }
 
     private fun onEpgLoaded(err: String?) {
@@ -453,7 +473,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         }
         val ch = current ?: return
         infoNum.text = ch.number.toString()
-        infoName.text = ch.name
+        infoName.text = Display.pretty(ch.name)
         Logos.into(infoLogo, ch.logo)
         val list = Repo.programmes(ch)
         val p = Epg.at(list, now)
@@ -466,7 +486,8 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
             infoProgress.visibility = View.INVISIBLE
         }
         val n = Epg.next(list, now)
-        infoNext.text = if (n != null) "Next:  ${n.title}  at ${fmt(n.start)}" else "OK  All channels      ▶  TV guide      ☰  Help"
+        infoNext.text = if (n != null) "Next:  ${n.title}  at ${fmt(n.start)}"
+            else Display.hints("OK" to "All channels", "▶" to "TV guide", "☰" to "Help")
     }
 
     // ---------------- overlays ----------------
@@ -490,6 +511,8 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         groupAdapter.items = groups
         channelAdapter.items = groups.getOrNull(gi)?.channels ?: emptyList()
         updateEmptyHint()
+        groupAdapter.activeIndex = gi
+        findViewById<TextView>(R.id.panelClock).text = fmt(System.currentTimeMillis())
         groupsList.setSelection(gi)
         val idx = channelAdapter.items.indexOfFirst { it.url == current?.url }
         channelsList.setSelection(idx.coerceAtLeast(0))

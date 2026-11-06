@@ -20,6 +20,7 @@ class SetupActivity : Activity() {
         Repo.init(this)
         ConfigServer.start(this)
         setContentView(R.layout.activity_setup)
+        Fonts.apply(window.decorView)
 
         val portal = findViewById<EditText>(R.id.portalUrl)
         val mac = findViewById<EditText>(R.id.macAddress)

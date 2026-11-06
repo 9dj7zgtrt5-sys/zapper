@@ -38,6 +38,7 @@ class VodPlayerActivity : Activity(), TvPlayer.Callback {
         req = r
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_vod_player)
+        Fonts.apply(window.decorView)
         view = findViewById(R.id.vodPlayerView)
         title = findViewById(R.id.vodPlayerTitle)
         msg = findViewById(R.id.vodPlayerMsg)

@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0D1014"
+    android:background="@color/ink"
     android:orientation="horizontal"
     android:padding="44dp">
 
@@ -31,7 +31,7 @@
             android:layout_height="wrap_content"
             android:ellipsize="end"
             android:maxLines="2"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/text"
             android:textSize="34sp"
             android:textStyle="bold" />
 
@@ -40,7 +40,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:textColor="#8AB4F8"
+            android:textColor="@color/focus"
             android:textSize="20sp" />
 
         <TextView
@@ -51,7 +51,7 @@
             android:ellipsize="end"
             android:lineSpacingExtra="4dp"
             android:maxLines="6"
-            android:textColor="#C8CCD0"
+            android:textColor="@color/text2"
             android:textSize="19sp" />
 
         <LinearLayout
@@ -89,7 +89,7 @@
                 android:id="@+id/seasonsList"
                 android:layout_width="220dp"
                 android:layout_height="match_parent"
-                android:background="#FF080A0D"
+                android:background="@color/ink_deep"
                 android:divider="@null"
                 android:listSelector="@drawable/list_selector"
                 android:scrollbars="none" />
@@ -118,7 +118,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:textColor="#AEB4BA"
+            android:textColor="@color/text2"
             android:textSize="17sp" />
     </LinearLayout>
 </LinearLayout>

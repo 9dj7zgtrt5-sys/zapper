@@ -3,12 +3,12 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="8dp">
+    android:padding="10dp">
 
     <FrameLayout
         android:id="@+id/posterFrame"
         android:layout_width="match_parent"
-        android:layout_height="210dp"
+        android:layout_height="206dp"
         android:background="@drawable/poster_placeholder">
 
         <TextView
@@ -16,8 +16,9 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:gravity="center"
-            android:padding="10dp"
-            android:textColor="#C8CCD0"
+            android:padding="12dp"
+            android:tag="medium"
+            android:textColor="@color/text2"
             android:textSize="18sp" />
 
         <ImageView
@@ -30,7 +31,7 @@
             android:id="@+id/posterProgress"
             style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="match_parent"
-            android:layout_height="5dp"
+            android:layout_height="6dp"
             android:layout_gravity="bottom"
             android:max="1000"
             android:progressDrawable="@drawable/progress"
@@ -41,10 +42,10 @@
         android:id="@+id/posterTitle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
+        android:layout_marginTop="8dp"
         android:ellipsize="end"
         android:lines="2"
         android:maxLines="2"
-        android:textColor="#FFFFFF"
+        android:textColor="@color/text"
         android:textSize="16sp" />
 </LinearLayout>

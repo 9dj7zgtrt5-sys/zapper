@@ -24,7 +24,7 @@
         android:paddingTop="32dp"
         android:paddingEnd="48dp"
         android:paddingBottom="48dp"
-        android:textColor="#FFFFFF"
+        android:textColor="@color/text"
         android:textSize="28sp"
         android:textStyle="bold" />
 
@@ -36,7 +36,7 @@
         android:background="@drawable/pill"
         android:gravity="center"
         android:padding="28dp"
-        android:textColor="#FFFFFF"
+        android:textColor="@color/text"
         android:textSize="24sp"
         android:visibility="gone" />
 </FrameLayout>

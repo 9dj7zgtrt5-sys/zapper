@@ -52,24 +52,29 @@ class GuideView(ctx: Context, attrs: AttributeSet?) : View(ctx, attrs) {
 
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rect = RectF()
-    private val text = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 20 * dp }
-    private val dim = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFAEB4BA.toInt(); textSize = 17 * dp }
-    private val big = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE; textSize = 30 * dp; isFakeBoldText = true
-    }
-    private val descPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFC8CCD0.toInt(); textSize = 18 * dp }
+    private val text = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = Palette.TEXT; textSize = 20 * dp }
+    private val textOnFocus = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = Palette.ON_FOCUS; textSize = 20 * dp }
+    private val dim = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = Palette.TEXT2; textSize = 17 * dp }
+    private val big = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = Palette.TEXT; textSize = 30 * dp }
+    private val descPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFC9CFDB.toInt(); textSize = 18 * dp }
 
-    private val cBg = 0xF20D1014.toInt()
-    private val cRowAlt = 0x14FFFFFF
-    private val cProg = 0xFF1E242B.toInt()
-    private val cPast = 0xFF161A1F.toInt()
-    private val cNow = 0xFF243140.toInt()
-    private val cSel = 0xFF3D7EFF.toInt()
-    private val cChanSel = 0xFF2A3644.toInt()
-    private val cLine = 0xFFFF5252.toInt()
-    private val cAccent = 0xFF8AB4F8.toInt()
+    private val cBg = 0xF710141F.toInt()
+    private val cRowAlt = 0x0AF4F1EC
+    private val cProg = Palette.RAISED
+    private val cPast = Palette.SURFACE
+    private val cNow = 0xFF2F3A52.toInt()
+    private val cSel = Palette.FOCUS
+    private val cChanSel = Palette.RAISED
+    private val cLine = Palette.LIVE
+    private val cAccent = Palette.FOCUS
 
     init {
+        Fonts.init(ctx)
+        text.typeface = Fonts.mediumFace
+        textOnFocus.typeface = Fonts.semiboldFace
+        dim.typeface = Fonts.regularFace
+        big.typeface = Fonts.semiboldFace
+        descPaint.typeface = Fonts.regularFace
         isFocusable = true
         isFocusableInTouchMode = true
     }
@@ -149,20 +154,20 @@ class GuideView(ctx: Context, attrs: AttributeSet?) : View(ctx, attrs) {
         val ch = channels.getOrNull(row)
         val sel = selectedProgramme()
         val left = pad * 2
-        val hint = "OK Watch    ☰ Favorite    Back Close"
+        val hint = "OK Watch      ☰ Favorite      Back Close"
         val hintW = dim.measureText(hint) + pad * 3
         c.drawText(hint, w - left - dim.measureText(hint), pad + 30 * dp, dim)
         if (ch == null) {
             c.drawText("No channels in this group", left, detailH / 2, big)
         } else {
-            val title = sel?.title?.ifBlank { null } ?: ch.name
+            val title = sel?.title?.ifBlank { null } ?: Display.pretty(ch.name)
             c.drawText(ellipsize(title, big, w - left * 2 - hintW), left, pad + 34 * dp, big)
             val meta = StringBuilder()
             if (sel != null) {
                 meta.append(dayFmt.format(Date(sel.start))).append("  ·  ")
                     .append(fmt(sel.start)).append(" – ").append(fmt(sel.stop)).append("  ·  ")
             }
-            meta.append(ch.number).append("  ").append(ch.name)
+            meta.append(ch.number).append("  ").append(Display.pretty(ch.name))
             c.drawText(ellipsize(meta.toString(), dim, w - left * 2), left, pad + 62 * dp, dim)
             if (sel != null) {
                 val tag = when {
@@ -174,7 +179,7 @@ class GuideView(ctx: Context, attrs: AttributeSet?) : View(ctx, attrs) {
                 if (tag != null) {
                     dim.color = cAccent
                     c.drawText(tag, w - left - dim.measureText(tag), pad + 62 * dp, dim)
-                    dim.color = 0xFFAEB4BA.toInt()
+                    dim.color = Palette.TEXT2
                 }
             }
             val desc = sel?.desc
@@ -195,7 +200,7 @@ class GuideView(ctx: Context, attrs: AttributeSet?) : View(ctx, attrs) {
         val pxPerMs = gw / span
         val viewEnd = viewStart + span
         val hy = detailH
-        fill.color = 0xFF14181D.toInt()
+        fill.color = Palette.INK_DEEP
         c.drawRect(0f, hy, w, hy + headerH, fill)
         c.drawText(dayFmt.format(Date(maxOf(selTime, viewStart))), left, hy + headerH - 10 * dp, dim)
         var t = viewStart
@@ -232,7 +237,7 @@ class GuideView(ctx: Context, attrs: AttributeSet?) : View(ctx, attrs) {
                 Logos.get(channel.logo) { if (it != null) invalidate() }
             }
             val fav = if (Repo.isFavorite(channel)) "★ " else ""
-            c.drawText(ellipsize(fav + channel.name, text, gx - nx - pad), nx, y + rowH / 2 + 7 * dp, text)
+            c.drawText(ellipsize(fav + Display.pretty(channel.name), text, gx - nx - pad), nx, y + rowH / 2 + 7 * dp, text)
 
             // programmes
             val list = Repo.programmes(channel)
@@ -250,17 +255,19 @@ class GuideView(ctx: Context, attrs: AttributeSet?) : View(ctx, attrs) {
                     else -> cProg
                 }
                 rect.set(x1 + 2 * dp, y + 3 * dp, x2 - 2 * dp, y + rowH - 3 * dp)
-                if (rect.width() > 0) c.drawRoundRect(rect, 4 * dp, 4 * dp, fill)
+                if (rect.width() > 0) c.drawRoundRect(rect, 8 * dp, 8 * dp, fill)
                 val label = (if (p.stop <= now && Catchup.available(channel, p, now)) "⟲ " else "") + p.title
-                c.drawText(ellipsize(label, text, x2 - x1 - 2 * pad), x1 + pad, y + rowH / 2 + 7 * dp, text)
+                val tp = if (isSel) textOnFocus else text
+                c.drawText(ellipsize(label, tp, x2 - x1 - 2 * pad), x1 + pad, y + rowH / 2 + 7 * dp, tp)
                 drew = true
                 k++
             }
             if (!drew) {
                 fill.color = if (idx == row) cSel else cProg
                 rect.set(gx + 2 * dp, y + 3 * dp, w - 2 * dp, y + rowH - 3 * dp)
-                c.drawRoundRect(rect, 4 * dp, 4 * dp, fill)
-                c.drawText(if (list.isEmpty()) "No programme information" else "", gx + pad, y + rowH / 2 + 7 * dp, dim)
+                c.drawRoundRect(rect, 8 * dp, 8 * dp, fill)
+                val np = if (idx == row) textOnFocus else dim
+                c.drawText(if (list.isEmpty()) "No programme information" else "", gx + pad, y + rowH / 2 + 7 * dp, np)
             }
             fill.color = 0x22FFFFFF
             c.drawRect(gx, y, gx + 1, y + rowH, fill)

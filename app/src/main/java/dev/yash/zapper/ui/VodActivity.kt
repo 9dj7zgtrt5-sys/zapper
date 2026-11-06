@@ -9,7 +9,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.AbsListView
 import android.widget.AdapterView
-import android.widget.ArrayAdapter
 import android.widget.BaseAdapter
 import android.widget.GridView
 import android.widget.ImageView
@@ -54,7 +53,7 @@ class PosterAdapter : BaseAdapter() {
 
     override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
         val v = convertView ?: LayoutInflater.from(parent.context).inflate(R.layout.item_poster, parent, false)
-            .also { it.tag = Holder(it) }
+            .also { Fonts.apply(it); it.tag = Holder(it) }
         val h = v.tag as Holder
         val item = items[position]
         h.title.text = item.title
@@ -76,6 +75,8 @@ class VodActivity : Activity() {
     private lateinit var loading: View
     private lateinit var empty: TextView
     private lateinit var subtitle: TextView
+    private lateinit var searchBox: android.widget.EditText
+    private var query = ""
     private val posters = PosterAdapter()
     private var categories: List<VodCategory> = emptyList()
     private var source: VodSource? = null
@@ -93,7 +94,18 @@ class VodActivity : Activity() {
         Repo.init(this)
         Logos.init(this)
         setContentView(R.layout.activity_vod)
+        Fonts.apply(window.decorView)
         series = intent.getBooleanExtra(EXTRA_SERIES, false)
+        searchBox = findViewById(R.id.vodSearch)
+        findViewById<TextView>(R.id.vodHint).text =
+            Display.hints("OK" to "Open", "◀" to "Categories", "▲" to "Search box", "Back" to "Live TV")
+        searchBox.setOnEditorActionListener { _, actionId, event ->
+            val enter = event != null && event.keyCode == android.view.KeyEvent.KEYCODE_ENTER &&
+                event.action == android.view.KeyEvent.ACTION_DOWN
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH ||
+                actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE || enter
+            ) { runSearch(searchBox.text.toString()); true } else false
+        }
         findViewById<TextView>(R.id.vodTitle).text = if (series) "Series" else "Movies"
         subtitle = findViewById(R.id.vodSubtitle)
         categoriesList = findViewById(R.id.vodCategories)
@@ -113,7 +125,8 @@ class VodActivity : Activity() {
         categoriesList.setOnItemClickListener { _, _, position, _ ->
             pending = position
             openPending.run()
-            if (posters.count > 0) grid.requestFocus()
+            if (categories.getOrNull(position)?.id == SEARCH) openKeyboard()
+            else if (posters.count > 0) grid.requestFocus()
         }
         grid.setOnItemClickListener { _, _, position, _ -> open(posters.items.getOrNull(position)) }
         grid.setOnScrollListener(object : AbsListView.OnScrollListener {
@@ -162,23 +175,32 @@ class VodActivity : Activity() {
         if (cats == null) { showEmpty("Couldn't load the list.\nCheck the internet and VPN, then try again.\n\n(${err ?: "unknown error"})"); return }
         if (noSeriesSection) { showEmpty("On this service, series are listed under Movies."); return }
         val list = ArrayList<VodCategory>()
-        if (ResumeStore.all().isNotEmpty()) list.add(VodCategory(CONTINUE, "▶ Continue watching"))
-        list.addAll(cats)
+        list.add(VodCategory(SEARCH, "🔍  Search"))
+        if (ResumeStore.all().isNotEmpty()) list.add(VodCategory(CONTINUE, "▶  Continue watching"))
+        list.addAll(cats.map { VodCategory(it.id, Display.pretty(it.title)) })
         categories = list
-        if (list.isEmpty()) { showEmpty("Nothing here yet."); return }
-        categoriesList.adapter = ArrayAdapter(this, R.layout.item_row, list.map { it.title })
-        categoriesList.setSelection(0)
+        if (cats.isEmpty()) { showEmpty("Nothing here yet."); return }
+        categoriesList.adapter = RowAdapter(list.map { it.title })
+        val start = if (list.size > 1) 1 else 0
+        categoriesList.setSelection(start)
         categoriesList.requestFocus()
-        pending = 0
+        pending = start
         openPending.run()
     }
 
     private var pending = 0
     private val openPending = Runnable {
         val cat = categories.getOrNull(pending) ?: return@Runnable
-        if (cat.id == current?.id && posters.count > 0) return@Runnable
+        if (cat.id == current?.id && (posters.count > 0 || cat.id == SEARCH)) return@Runnable
         current = cat
-        subtitle.text = cat.title.removePrefix("▶ ")
+        val isSearch = cat.id == SEARCH
+        searchBox.visibility = if (isSearch) View.VISIBLE else View.GONE
+        val d = resources.displayMetrics.density
+        grid.setPadding(grid.paddingLeft, ((if (isSearch) 84 else 8) * d).toInt(), grid.paddingRight, grid.paddingBottom)
+        subtitle.text = when {
+            isSearch -> if (query.isEmpty()) "Find a title" else "Results for “$query”"
+            else -> cat.title.removePrefix("▶  ")
+        }
         generation++
         posters.items.clear()
         posters.notifyDataSetChanged()
@@ -190,6 +212,8 @@ class VodActivity : Activity() {
             posters.items.addAll(continueItems())
             posters.notifyDataSetChanged()
             pages = 0
+        } else if (isSearch) {
+            if (query.isEmpty()) { pages = 0; showEmpty("Press OK on Search, then type a name\nor hold the mic button and say it.") } else loadMore()
         } else loadMore()
     }
 
@@ -197,13 +221,17 @@ class VodActivity : Activity() {
         val src = source ?: return
         val cat = current ?: return
         if (busy || cat.id == CONTINUE || page >= pages) return
+        if (cat.id == SEARCH && query.isEmpty()) return
+        val q = query
         busy = true
         val gen = generation
         val next = page + 1
         if (posters.count == 0) showLoading(true)
         VodSession.exec.execute {
             var err: String? = null
-            val result = try { src.page(series, cat, next) } catch (e: Exception) { err = e.message; null }
+            val result = try {
+                if (cat.id == SEARCH) src.search(series, q, next) else src.page(series, cat, next)
+            } catch (e: Exception) { err = e.message; null }
             main.post {
                 if (gen != generation) return@post
                 busy = false
@@ -217,9 +245,34 @@ class VodActivity : Activity() {
                 pages = result.pages.coerceAtLeast(next).let { if (result.items.isEmpty()) next else it }
                 posters.items.addAll(result.items)
                 posters.notifyDataSetChanged()
-                if (posters.count == 0) showEmpty("Nothing in this category.")
+                if (next == 1 && result.total > 0 && cat.id != SEARCH) {
+                    subtitle.text = cat.title + "      " + "%,d".format(result.total) + " titles"
+                }
+                if (posters.count == 0) showEmpty(
+                    if (cat.id == SEARCH) "Nothing found for “$q”.\nTry a shorter name, like one word from the title." else "Nothing in this category."
+                )
             }
         }
+    }
+
+    private fun openKeyboard() {
+        searchBox.requestFocus()
+        searchBox.setSelection(searchBox.text.length)
+        val imm = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+        imm.showSoftInput(searchBox, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+    }
+
+    private fun runSearch(text: String) {
+        val q = text.trim()
+        val imm = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+        imm.hideSoftInputFromWindow(searchBox.windowToken, 0)
+        if (q.isEmpty()) return
+        query = q
+        val idx = categories.indexOfFirst { it.id == SEARCH }
+        current = null
+        pending = idx
+        openPending.run()
+        main.postDelayed({ if (posters.count > 0) grid.requestFocus() }, 600)
     }
 
     private fun open(item: VodItem?) {
@@ -245,5 +298,6 @@ class VodActivity : Activity() {
     companion object {
         const val EXTRA_SERIES = "series"
         private const val CONTINUE = "__continue__"
+        private const val SEARCH = "__search__"
     }
 }

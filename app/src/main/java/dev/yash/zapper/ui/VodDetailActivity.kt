@@ -4,7 +4,6 @@ import android.app.Activity
 import android.os.Bundle
 import android.view.View
 import android.widget.AdapterView
-import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.ListView
@@ -43,6 +42,7 @@ class VodDetailActivity : Activity() {
         item = it
         source = src
         setContentView(R.layout.activity_vod_detail)
+        Fonts.apply(window.decorView)
 
         Logos.into(findViewById<ImageView>(R.id.detailPoster), item.poster, Logos.POSTER_PX)
         findViewById<TextView>(R.id.detailTitle).text = item.title
@@ -51,7 +51,7 @@ class VodDetailActivity : Activity() {
             item.rating?.let { "★ $it" },
             if (item.minutes > 0) formatMinutes(item.minutes) else null,
             item.genre,
-        ).joinToString("   ·   ")
+        ).joinToString("      ")
         findViewById<TextView>(R.id.detailMeta).text = meta
         val desc = findViewById<TextView>(R.id.detailDesc)
         desc.text = item.description ?: ""
@@ -102,7 +102,7 @@ class VodDetailActivity : Activity() {
         desc.maxLines = 3
         findViewById<View>(R.id.movieButtons).visibility = View.GONE
         findViewById<View>(R.id.seriesBox).visibility = View.VISIBLE
-        hint.text = "▲ ▼  Choose      ▶  Episodes      OK  Play      Back  Return"
+        hint.text = Display.hints("▲ ▼" to "Choose", "▶" to "Episodes", "OK" to "Play", "Back" to "Return")
         loading.visibility = View.VISIBLE
         VodSession.exec.execute {
             val s = try { source.seasons(item) } catch (_: Exception) { null }
@@ -126,7 +126,7 @@ class VodDetailActivity : Activity() {
             return
         }
         seasons = s
-        seasonsList.adapter = ArrayAdapter(this, R.layout.item_row, s.map { it.title })
+        seasonsList.adapter = RowAdapter(s.map { it.title })
         seasonsList.setSelection(0)
         if (s.size == 1) seasonsList.visibility = View.GONE
         selectSeason(0)
@@ -158,7 +158,7 @@ class VodDetailActivity : Activity() {
             if (saved != null) "${ep.title}      ▶ resume ${formatTime(saved.position)}" else ep.title
         }
         val sel = episodesList.selectedItemPosition
-        episodesList.adapter = ArrayAdapter(this, R.layout.item_row, labels)
+        episodesList.adapter = RowAdapter(labels)
         if (sel >= 0) episodesList.setSelection(sel)
         if (episodes.isEmpty()) hint.text = "No episodes in this season."
     }
