@@ -528,7 +528,53 @@ class StalkerClient(
             "type=vod&action=create_link&cmd=${enc(cmd)}&series=${series ?: ""}&forced_storage=&disable_ad=0" +
                 "&download=0&force_ch_link_check=0",
         ).optJSONObject("js")
-        return extractUrl(js?.optString("cmd").orEmpty()) ?: extractUrl(cmd)?.takeIf { !it.contains("localhost") }
+        val url = extractUrl(js?.optString("cmd").orEmpty()) ?: extractUrl(cmd)?.takeIf { !it.contains("localhost") }
+        android.util.Log.i("Zapper", "vod link cmd=${decodeCmd(cmd)} series=$series -> $url")
+        return url
+    }
+
+    /** Portal "cmd" values are often base64 JSON; shows them readably for diagnostics. */
+    private fun decodeCmd(cmd: String): String = try {
+        if (cmd.startsWith("ey")) String(android.util.Base64.decode(cmd, android.util.Base64.DEFAULT)) else cmd
+    } catch (_: Exception) { cmd }
+
+    /**
+     * Phone page diagnostics for "the wrong show plays": walks search → seasons → episodes → link for one
+     * title and reports what the portal sent at each step.
+     */
+    fun debugSeries(query: String): List<String> {
+        val out = ArrayList<String>()
+        fun clip(x: String, n: Int = 600) = if (x.length > n) x.take(n) + "…" else x
+        try {
+            val type = if (try { vodCategories("series").isNotEmpty() } catch (_: Exception) { false }) "series" else "vod"
+            out.add("Searching $type for “$query”")
+            val js = call("type=$type&action=get_ordered_list&category=*&genre=*&p=1&sortby=added&fav=0&hd=0&not_ended=0&abc=*&years=*&search=${enc(query)}")
+                .optJSONObject("js")
+            val data = js?.optJSONArray("data")
+            if (data == null || data.length() == 0) { out.add("No results: ${clip(js.toString())}"); return out }
+            val o = data.getJSONObject(0)
+            out.add("First result: id=${o.optString("id")} name=${o.optString("name")}")
+            out.add("  cmd=${decodeCmd(o.optString("cmd"))}")
+            out.add("  series=${o.opt("series")}  is_series=${o.optString("is_series")}")
+            val item = vodItem(o, type)
+            val seasonsJs = call("type=$type&action=get_ordered_list&movie_id=${enc(item.id)}&season_id=0&episode_id=0&p=1").optJSONObject("js")
+            out.add("Seasons raw: ${clip(seasonsJs.toString(), 900)}")
+            val seasons = seasons(item)
+            out.add("Seasons parsed: " + seasons.joinToString { "${it.title} [id=${it.id} cmd=${it.cmd?.let { c -> decodeCmd(c) }} eps=${it.episodeNumbers.take(5)}]" })
+            val first = seasons.firstOrNull() ?: return out
+            val epJs = call("type=$type&action=get_ordered_list&movie_id=${enc(item.id)}&season_id=${enc(first.id)}&episode_id=0&p=1").optJSONObject("js")
+            out.add("Episodes raw: ${clip(epJs.toString(), 900)}")
+            val eps = episodes(item, first)
+            out.add("Episodes parsed: " + eps.take(4).joinToString { "${it.title} [id=${it.id} n=${it.number} cmd=${decodeCmd(it.cmd)}]" })
+            val ep = eps.firstOrNull() ?: return out
+            val link = call("type=vod&action=create_link&cmd=${enc(ep.cmd)}&series=${ep.number ?: ""}&forced_storage=&disable_ad=0&download=0&force_ch_link_check=0")
+            out.add("create_link (series=${ep.number}): ${clip(link.toString())}")
+            val link2 = call("type=vod&action=create_link&cmd=${enc(ep.cmd)}&series=&forced_storage=&disable_ad=0&download=0&force_ch_link_check=0")
+            out.add("create_link (no series): ${clip(link2.toString())}")
+        } catch (e: Exception) {
+            out.add("✗ ${e.javaClass.simpleName}: ${e.message}")
+        }
+        return out
     }
 
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")

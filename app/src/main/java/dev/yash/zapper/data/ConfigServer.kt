@@ -100,6 +100,12 @@ object ConfigServer {
                     "<h2>Portal connection test</h2><pre>" + lines.joinToString("\n") { esc(it) } + "</pre>" +
                         "<p class='muted'>Send a screenshot of this page if it fails. Please don't run the test many times in a row: providers block connections that try to sign in too often.</p><p><a href='/'>Back to settings</a></p>"
                 )
+            } else if (path.startsWith("/debug")) {
+                // /debug?q=Family+Kirana : how the portal describes one show, step by step.
+                val q = URLDecoder.decode(path.substringAfter("q=", "").substringBefore('&'), "UTF-8")
+                val lines = if (q.isBlank()) listOf("Add ?q=<show name> to the address, e.g. /debug?q=Family Kirana")
+                else Repo.debugSeries(q)
+                page("<h2>Series check</h2><pre style='white-space:pre-wrap;word-break:break-all'>" + lines.joinToString("\n\n") { esc(it) } + "</pre><p><a href='/'>Back to settings</a></p>")
             } else if (method == "POST" && path.startsWith("/save")) {
                 val form = parseForm(body)
                 save(form)

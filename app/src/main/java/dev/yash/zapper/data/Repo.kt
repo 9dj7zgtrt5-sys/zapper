@@ -379,6 +379,8 @@ object Repo {
         return try { PortalVod.link(c, r) } catch (_: Exception) { null }
     }
 
+    fun debugSeries(q: String): List<String> = stalker?.debugSeries(q) ?: listOf("Portal not loaded yet: open Zapper on the TV first.")
+
     fun keepAlive() {
         try { stalker?.keepAlive() } catch (_: Exception) {}
     }
