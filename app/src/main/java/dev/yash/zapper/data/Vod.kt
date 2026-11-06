@@ -226,8 +226,16 @@ object ResumeStore {
         Repo.store().edit().putString("resume", arr.toString()).apply()
     }
 
+    /** 3.6: episodes saved before the episode-file fix point at the wrong video; forget them once. */
+    private fun migrate() {
+        val prefs = Repo.store()
+        if (prefs.getBoolean("resume_v2", false)) return
+        save(load().filterNot { it.series != null && !it.direct && !it.cmd.startsWith(StalkerClient.EPISODE_PREFIX) })
+        prefs.edit().putBoolean("resume_v2", true).apply()
+    }
+
     @Synchronized
-    fun all(): List<ResumeEntry> = load().sortedByDescending { it.updated }
+    fun all(): List<ResumeEntry> { migrate(); return load().sortedByDescending { it.updated } }
 
     @Synchronized
     fun get(key: String): ResumeEntry? = load().firstOrNull { it.key == key }

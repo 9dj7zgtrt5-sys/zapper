@@ -450,10 +450,11 @@ class StalkerClient(
         val out = ArrayList<Season>()
         for (i in 0 until data.length()) {
             val o = data.optJSONObject(i) ?: continue
+            val sn = o.optString("season_number").toIntOrNull()
             out.add(
                 Season(
                     o.optString("id"),
-                    shortTitle(o.optString("name"), item.title, "Season", i + 1),
+                    if (sn != null) "Season $sn" else shortTitle(o.optString("name"), item.title, "Season", i + 1),
                     o.optString("cmd").takeIf { it.isNotBlank() && it != "null" },
                     numberList(o),
                 ),
@@ -514,16 +515,54 @@ class StalkerClient(
                     inner.forEach { n -> out.add(Episode("${o.optString("id")}:$n", "Episode $n", cmd, n)) }
                     continue
                 }
+                val n = num ?: (out.size + 1)
+                val title = episodeTitle(o.optString("name"), listOf(item.title, o.optString("series_name"), o.optString("series_original_name")), n)
+                if (cmd == null && (o.optBoolean("is_episode") || o.has("series_number"))) {
+                    // Newer Ministra: the episode's video is a separate file, looked up when it's played.
+                    out.add(Episode(o.optString("id"), title, "$EPISODE_PREFIX${item.sourceType}|${item.id}|${season.id}|${o.optString("id")}", n))
+                    continue
+                }
                 val playCmd = cmd ?: fallbackCmd ?: continue
-                out.add(Episode(o.optString("id"), shortTitle(o.optString("name"), item.title, "Episode", num ?: (out.size + 1)), playCmd, num))
+                out.add(Episode(o.optString("id"), title, playCmd, num))
             }
             page++
         }
         return out.distinctBy { it.id }.sortedWith(compareBy { it.number ?: Int.MAX_VALUE })
     }
 
+    /** "S05 E31 | Jersey Shore: Family Vacation" → "Episode 31"; keeps a real episode name if there is one. */
+    private fun episodeTitle(raw: String, shows: List<String>, n: Int): String {
+        fun norm(x: String) = x.lowercase().replace(Regex("[^a-z0-9]"), "")
+        var t = raw.trim()
+        t = t.replace(Regex("(?i)^(s\\d+\\s*e\\d+|season\\s*\\d+\\s*episode\\s*\\d+|episode\\s*\\d+|ep\\.?\\s*\\d+|e\\d+)"), "")
+        t = t.trim().trimStart('|', '.', '-', ':', '·').trim()
+        val showNames = shows.map { norm(it) }.filter { it.isNotEmpty() }
+        if (t.isEmpty() || t == "null" || showNames.any { norm(t) == it || norm(t).startsWith(it) || it.startsWith(norm(t)) }) return "Episode $n"
+        return "Episode $n · $t"
+    }
+
+    /** The playable file of one episode (newer Ministra lists files under each episode). */
+    private fun episodeFile(marker: String): String? {
+        val parts = marker.removePrefix(EPISODE_PREFIX).split('|')
+        if (parts.size < 4) return null
+        val (type, movie, season, episode) = parts
+        val js = call("type=$type&action=get_ordered_list&movie_id=${enc(movie)}&season_id=${enc(season)}&episode_id=${enc(episode)}&p=1")
+            .optJSONObject("js")
+        val data = js?.optJSONArray("data")
+        val file = (0 until (data?.length() ?: 0)).mapNotNull { data?.optJSONObject(it) }
+            .firstOrNull { it.optString("cmd").isNotBlank() && it.optString("cmd") != "null" }
+        if (file == null) android.util.Log.w("Zapper", "No file for episode $marker: ${snippet(js.toString())}")
+        return file?.optString("cmd")
+    }
+
     /** Fresh playable link for a movie, or for one episode of a series. */
-    fun vodLink(cmd: String, series: Int?): String? {
+    fun vodLink(cmdIn: String, seriesIn: Int?): String? {
+        var cmd = cmdIn
+        var series = seriesIn
+        if (cmd.startsWith(EPISODE_PREFIX)) {
+            cmd = episodeFile(cmd) ?: return null
+            series = null // the file already is the episode
+        }
         val js = call(
             "type=vod&action=create_link&cmd=${enc(cmd)}&series=${series ?: ""}&forced_storage=&disable_ad=0" +
                 "&download=0&force_ch_link_check=0",
@@ -567,10 +606,12 @@ class StalkerClient(
             val eps = episodes(item, first)
             out.add("Episodes parsed: " + eps.take(4).joinToString { "${it.title} [id=${it.id} n=${it.number} cmd=${decodeCmd(it.cmd)}]" })
             val ep = eps.firstOrNull() ?: return out
-            val link = call("type=vod&action=create_link&cmd=${enc(ep.cmd)}&series=${ep.number ?: ""}&forced_storage=&disable_ad=0&download=0&force_ch_link_check=0")
-            out.add("create_link (series=${ep.number}): ${clip(link.toString())}")
-            val link2 = call("type=vod&action=create_link&cmd=${enc(ep.cmd)}&series=&forced_storage=&disable_ad=0&download=0&force_ch_link_check=0")
-            out.add("create_link (no series): ${clip(link2.toString())}")
+            if (ep.cmd.startsWith(EPISODE_PREFIX)) {
+                val p = ep.cmd.removePrefix(EPISODE_PREFIX).split('|')
+                val files = call("type=${p[0]}&action=get_ordered_list&movie_id=${enc(p[1])}&season_id=${enc(p[2])}&episode_id=${enc(p[3])}&p=1").optJSONObject("js")
+                out.add("Episode ${ep.number} files: ${clip(files.toString(), 700)}")
+            }
+            out.add("Zapper plays ${ep.title} from: ${vodLink(ep.cmd, ep.number)}")
         } catch (e: Exception) {
             out.add("✗ ${e.javaClass.simpleName}: ${e.message}")
         }
@@ -586,6 +627,8 @@ class StalkerClient(
     }
 
     companion object {
+        /** Marks an episode whose file is looked up at play time: "ep|type|movie|season|episode". */
+        const val EPISODE_PREFIX = "ep|"
         const val UA = "Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3"
 
         fun normalizeMac(m: String) = m.trim().uppercase().replace('-', ':')
