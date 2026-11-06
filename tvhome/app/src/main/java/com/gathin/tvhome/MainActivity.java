@@ -469,6 +469,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // off the list (needs WRITE_SECURE_SETTINGS, granted by build-and-install with RESTORE_KEY_SERVICES=1).
         if (cfg.restoreKeyServices) ServiceRepair.restore(this);
         settingsRevision = settingsRevision();
+        themeStamp = Config.themeStamp(this);
         applyViewInputsHandler(cfg.handleViewInputs);
         settingsKeycodes = cfg.settingsKeycodes;
         settingsKeyPanel = cfg.settingsKeyPanel;
@@ -1097,6 +1098,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             recreate();
             return;
         }
+        // Zapper patch: photos or theme sent from the phone page while Home was in the background.
+        if (!themeStamp.equals(Config.themeStamp(this))) {
+            recreate();
+            return;
+        }
         restartIdleClock();
         promptsPaused = false;
         if (grid.getAdapter() == null) grid.setAdapter(adapter);   // dropped by onTrimMemory
@@ -1146,6 +1152,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     }
 
     /** Launcher settings' change count (Config.SETTINGS_REVISION_KEY); onResume rebuilds Home when it moved. */
+    /** Zapper patch: theme_revision when this Home was built; a push from the Zapper phone page changes it. */
+    private String themeStamp = "absent";
+
     private long settingsRevision() {
         return getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE).getLong(Config.SETTINGS_REVISION_KEY, 0);
     }

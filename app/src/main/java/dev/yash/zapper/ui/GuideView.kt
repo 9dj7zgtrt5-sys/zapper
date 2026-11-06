@@ -126,7 +126,9 @@ class GuideView(ctx: Context, attrs: AttributeSet?) : View(ctx, attrs) {
                 if (event.repeatCount == 0) { event.startTracking(); centerHeld = false }
                 return true
             }
-            KeyEvent.KEYCODE_MENU -> channels.getOrNull(row)?.let { listener?.onGuideFavorite(it) }
+            KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_PROG_RED, KeyEvent.KEYCODE_PROG_GREEN, KeyEvent.KEYCODE_PROG_YELLOW,
+            KeyEvent.KEYCODE_PROG_BLUE, KeyEvent.KEYCODE_BOOKMARK ->
+                if (event.repeatCount == 0) channels.getOrNull(row)?.let { listener?.onGuideFavorite(it) }
             else -> return super.onKeyDown(keyCode, event)
         }
         invalidate()

@@ -60,7 +60,7 @@ object ConfigServer {
             val parts = requestLine.split(' ')
             val method = parts.getOrNull(0) ?: "GET"
             val path = parts.getOrNull(1) ?: "/"
-            val body = if (length in 1..(1024 * 1024)) {
+            val raw = if (length in 1..(12 * 1024 * 1024)) {
                 val buf = ByteArray(length)
                 var read = 0
                 while (read < length) {
@@ -68,10 +68,32 @@ object ConfigServer {
                     if (n < 0) break
                     read += n
                 }
-                String(buf, 0, read, Charsets.UTF_8)
-            } else ""
+                if (read == length) buf else buf.copyOf(read)
+            } else ByteArray(0)
+            val body = if (path.startsWith("/photo")) "" else String(raw, Charsets.UTF_8)
 
-            val html = if (method == "POST" && path.startsWith("/test")) {
+            // Photo upload from the page's script: plain-text reply, not a page.
+            if (method == "POST" && path == "/photo") {
+                val reply = try {
+                    when {
+                        !HomeTheme.launcherInstalled(app) -> "The home screen app is not installed on this TV."
+                        !HomeTheme.permitted(app) -> "Zapper needs one permission first (see the note on the page)."
+                        raw.size < 1000 -> "The photo did not arrive. Try again."
+                        else -> { HomeTheme.addPhoto(app, raw); "ok" }
+                    }
+                } catch (e: Exception) { "Could not save the photo: ${e.message}" }
+                respond(s, reply, "text/plain")
+                return
+            }
+
+            val html = if (method == "POST" && path.startsWith("/photos/reset")) {
+                try {
+                    HomeTheme.resetToDrawings(app)
+                    page("<h2>Done ✓</h2><p>Your photos were removed and the drawings are back. You'll see them the next time the home screen opens.</p><p><a href='/'>Back to settings</a></p>")
+                } catch (e: Exception) {
+                    page("<h2>Couldn't reset</h2><p>${esc(e.message ?: "")}</p><p><a href='/'>Back to settings</a></p>")
+                }
+            } else if (method == "POST" && path.startsWith("/test")) {
                 val lines = if (Repo.isPortal && Repo.portalUrl.isNotBlank()) Repo.newStalker().let { c -> c.diagnose().also { Repo.rememberStalker(c) } }
                 else listOf("Choose \"Portal + MAC address\" and save a portal URL first.")
                 page(
@@ -86,15 +108,58 @@ object ConfigServer {
                 else page("<h2>Saved ✓</h2><p>The TV has the new settings.</p><p><a href='/'>Back to settings</a></p>")
             } else form()
 
-            val bytes = html.toByteArray(Charsets.UTF_8)
-            val out = s.getOutputStream()
-            out.write(("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n").toByteArray())
-            out.write(bytes)
-            out.flush()
+            respond(s, html, "text/html")
         } catch (_: Exception) {
         } finally {
             try { s.close() } catch (_: Exception) {}
         }
+    }
+
+    private fun respond(s: Socket, text: String, type: String) {
+        val bytes = text.toByteArray(Charsets.UTF_8)
+        val out = s.getOutputStream()
+        out.write(("HTTP/1.1 200 OK\r\nContent-Type: $type; charset=utf-8\r\nCache-Control: no-store\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n").toByteArray())
+        out.write(bytes)
+        out.flush()
+    }
+
+    private fun photoSection(): String {
+        if (!HomeTheme.launcherInstalled(app)) return ""
+        val n = HomeTheme.photos()
+        val status = if (n > 0) "$n of your photos are on the home screen." else "The home screen shows the family drawings."
+        val perm = if (HomeTheme.permitted(app)) "" else
+            "<p class='warn'>One-time step: run <code>adb shell pm grant dev.yash.zapper android.permission.WRITE_SECURE_SETTINGS</code> in Termux, then reload this page.</p>"
+        return """
+            <h3>Home screen photos</h3>
+            <p class="muted">$status Pick photos on this phone: they're resized and sent to the TV, and change every 30 minutes. They appear the next time the home screen opens.</p>
+            $perm
+            <input type="file" id="ph" accept="image/*" multiple>
+            <button type="button" onclick="up()" style="margin-top:10px">Send photos to the TV</button>
+            <p id="phs" class="muted"></p>
+            <form method="post" action="/photos/reset" onsubmit="return confirm('Remove all your photos and show the drawings again?')">
+              <button type="submit" class="secondary">Remove my photos</button>
+            </form>
+            <script>
+            function shrink(f){return new Promise(function(res,rej){var img=new Image();img.onload=function(){
+              var W=1920,H=1080,c=document.createElement('canvas');c.width=W;c.height=H;var x=c.getContext('2d');
+              var cover=Math.max(W/img.width,H/img.height),fit=Math.min(W/img.width,H/img.height);
+              x.fillStyle='#10141F';x.fillRect(0,0,W,H);
+              if(img.height>img.width*0.9){ /* portrait: soft blurred backdrop, whole photo on top */
+                try{x.filter='blur(40px) brightness(0.55)';}catch(e){}
+                x.drawImage(img,(W-img.width*cover)/2,(H-img.height*cover)/2,img.width*cover,img.height*cover);
+                x.filter='none';x.drawImage(img,(W-img.width*fit)/2,(H-img.height*fit)/2,img.width*fit,img.height*fit);
+              } else { x.drawImage(img,(W-img.width*cover)/2,(H-img.height*cover)/2,img.width*cover,img.height*cover); }
+              c.toBlob(function(b){b?res(b):rej('could not convert')},'image/jpeg',0.86);};
+              img.onerror=function(){rej('this photo type could not be read')};img.src=URL.createObjectURL(f);});}
+            async function up(){var fs=document.getElementById('ph').files,st=document.getElementById('phs');
+              if(!fs.length){st.textContent='Choose one or more photos first.';return;}
+              for(var i=0;i<fs.length;i++){st.textContent='Sending photo '+(i+1)+' of '+fs.length+'…';
+                try{var b=await shrink(fs[i]);var r=await fetch('/photo',{method:'POST',body:b,headers:{'Content-Type':'image/jpeg'}});
+                  var t=await r.text();if(t!=='ok'){st.textContent='Photo '+(i+1)+': '+t;return;}}
+                catch(e){st.textContent='Photo '+(i+1)+': '+e;return;}}
+              st.textContent='Done ✓ '+fs.length+' photo(s) sent. Press Home on the TV to see them.';}
+            </script>
+        """.trimIndent()
     }
 
     private fun save(f: List<Pair<String, String>>) {
@@ -242,6 +307,7 @@ object ConfigServer {
               </div>
             </form>
             <form method="post" action="/test"><button type="submit" class="secondary" style="margin-top:12px">🔍 Test portal connection</button></form>
+            ${photoSection()}
             <script>function src(){var p=document.querySelector("input[name=source][value=portal]").checked;document.getElementById("portalBox").style.display=p?"":"none";document.getElementById("m3uBox").style.display=p?"none":""}src();
             function setAll(v){document.querySelectorAll("input[name=g]").forEach(function(c){c.checked=v})}</script>
             """.trimIndent()
@@ -262,7 +328,7 @@ object ConfigServer {
         .tools{display:flex;gap:8px;margin:8px 0}.tools button{width:auto;margin:0;padding:8px 12px;font-size:14px;background:#262b31}
         .buttons{display:flex;flex-direction:column;gap:10px;margin-top:24px}
         button{width:100%;padding:14px;border:0;border-radius:8px;background:#3d7eff;color:#fff;font-size:16px;font-weight:600}
-        button.secondary{background:#262b31}pre{white-space:pre-wrap;word-break:break-all;background:#1b1f24;padding:12px;border-radius:8px;font-size:13px;line-height:1.5}summary{cursor:pointer;margin:14px 0;color:#8ab4f8}a{color:#8ab4f8}
+        button.secondary{background:#262b31}.warn{background:#3a2a0c;color:#f2c97a;padding:10px;border-radius:8px}code{word-break:break-all}input[type=file]{padding:14px}pre{white-space:pre-wrap;word-break:break-all;background:#1b1f24;padding:12px;border-radius:8px;font-size:13px;line-height:1.5}summary{cursor:pointer;margin:14px 0;color:#8ab4f8}a{color:#8ab4f8}
         </style></head><body>$body</body></html>
     """.trimIndent()
 

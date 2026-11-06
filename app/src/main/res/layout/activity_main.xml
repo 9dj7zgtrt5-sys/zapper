@@ -29,6 +29,23 @@
         android:textSize="24sp"
         android:visibility="gone" />
 
+    <!-- Channel number being typed with the remote's number buttons -->
+    <TextView
+        android:id="@+id/numEntry"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_margin="40dp"
+        android:background="@drawable/pill"
+        android:paddingStart="28dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="28dp"
+        android:paddingBottom="12dp"
+        android:textColor="@color/focus"
+        android:textSize="54sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
     <!-- Channel info banner -->
     <LinearLayout
         android:id="@+id/infoBar"

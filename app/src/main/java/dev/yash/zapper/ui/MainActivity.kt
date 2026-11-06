@@ -700,7 +700,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
             Mode.LIST -> {
                 if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && groupsList.hasFocus() &&
                     openVodFor(groups.getOrNull(groupsList.selectedItemPosition))) return true
-                if (keyCode == KeyEvent.KEYCODE_MENU) {
+                if (isFavoriteKey(keyCode)) {
                     if (event.repeatCount == 0 && channelsList.hasFocus()) {
                         (channelsList.selectedItem as? Channel)?.let { if (!it.isVod) toggleFavorite(it) }
                     }
@@ -714,7 +714,39 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         return super.onKeyDown(keyCode, event)
     }
 
+    // ---- number buttons: type a channel number (TV remotes over HDMI-CEC have them) ----
+    private val digits = StringBuilder()
+    private val commitNumber = Runnable {
+        val n = digits.toString().toIntOrNull()
+        digits.setLength(0)
+        findViewById<TextView>(R.id.numEntry).visibility = View.GONE
+        if (n == null) return@Runnable
+        val all = groups.getOrNull(1)?.channels ?: return@Runnable
+        val ch = all.firstOrNull { it.number == n }
+        if (ch != null) playChannel(ch, 1) else toast("There is no channel $n")
+    }
+
+    private fun digitOf(keyCode: Int): Int? = when (keyCode) {
+        in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> keyCode - KeyEvent.KEYCODE_0
+        in KeyEvent.KEYCODE_NUMPAD_0..KeyEvent.KEYCODE_NUMPAD_9 -> keyCode - KeyEvent.KEYCODE_NUMPAD_0
+        else -> null
+    }
+
+    private fun typeDigit(d: Int) {
+        if (digits.length >= 4) digits.setLength(0)
+        digits.append(d)
+        findViewById<TextView>(R.id.numEntry).apply { text = digits; visibility = View.VISIBLE }
+        main.removeCallbacks(commitNumber)
+        main.postDelayed(commitNumber, 1500)
+    }
+
+    /** Buttons that add/remove a favourite on remotes without ☰ (colour keys, bookmark, info). */
+    private fun isFavoriteKey(k: Int) = k == KeyEvent.KEYCODE_MENU || k == KeyEvent.KEYCODE_PROG_RED ||
+        k == KeyEvent.KEYCODE_PROG_GREEN || k == KeyEvent.KEYCODE_PROG_YELLOW || k == KeyEvent.KEYCODE_PROG_BLUE ||
+        k == KeyEvent.KEYCODE_BOOKMARK
+
     private fun handlePlayerKey(keyCode: Int): Boolean {
+        digitOf(keyCode)?.let { if (vodTitle == null) { typeDigit(it); return true } }
         if (vodTitle != null) {
             when (keyCode) {
                 KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_REWIND -> player.seekBy(-10_000)

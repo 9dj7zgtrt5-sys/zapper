@@ -778,6 +778,12 @@ final class Config {
         return chosen >= 30 && chosen <= 100 ? chosen : theme;
     }
 
+    /** Zapper patch: the theme_revision token, so Home can rebuild after a push without a restart. */
+    static String themeStamp(Context ctx) {
+        File dir = dir(ctx);
+        return revisionToken(dir == null ? null : new File(dir, THEME_REVISION_NAME));
+    }
+
     private static String fileStamp(File file) {
         return file != null && file.isFile() ? file.length() + "@" + file.lastModified() : "absent";
     }

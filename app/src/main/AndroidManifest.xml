@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!-- Granted by ADB on newer Android TV so Zapper may open itself at startup / wake. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Granted by ADB so Zapper can send photos to the TV home screen (the launcher's theme provider). -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
 
     <!-- Lets the app see installed VPN apps (needed on Android 11+ based Fire OS). -->
     <queries>
