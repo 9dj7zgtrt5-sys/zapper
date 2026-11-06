@@ -101,6 +101,14 @@ object Repo {
     val configVersion: Int get() = prefs.getInt("cfgver", 0)
     /** Bumped when only display settings change (no download). */
     val displayVersion: Int get() = prefs.getInt("dispver", 0)
+    /** Packages shown under "Apps" in Zapper; null = not chosen yet (use defaults). */
+    val shownApps: List<String>?
+        get() = prefs.getString("apps", null)?.split('\n')?.filter { it.isNotEmpty() }
+
+    fun saveShownApps(pkgs: List<String>) {
+        prefs.edit().putString("apps", pkgs.joinToString("\n")).putInt("dispver", displayVersion + 1).apply()
+    }
+
     var helpShown: Boolean
         get() = prefs.getBoolean("helpshown", false)
         set(v) { prefs.edit().putBoolean("helpshown", v).apply() }
@@ -192,6 +200,7 @@ object Repo {
             out.add(Group("🎬 Movies", emptyList(), Group.Kind.MOVIES))
             out.add(Group("📺 Series", emptyList(), Group.Kind.SERIES))
         }
+        out.add(Group("📱 Apps", emptyList(), Group.Kind.APPS))
         val liveGroups = LinkedHashMap<String, ArrayList<Channel>>()
         for (c in all) {
             if (c.isVod || c.group in hidden) continue

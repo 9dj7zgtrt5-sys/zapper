@@ -95,3 +95,28 @@ class RowAdapter(private val rows: List<String>) : BaseAdapter() {
         return v
     }
 }
+
+/** "Apps" rows in the channel list: icon + name, OK opens the app. */
+class AppsAdapter(private val ctx: android.content.Context) : BaseAdapter() {
+    var items: List<dev.yash.zapper.data.Apps.Entry> = emptyList()
+        set(v) { field = v; notifyDataSetChanged() }
+
+    override fun getCount() = items.size
+    override fun getItem(position: Int) = items[position]
+    override fun getItemId(position: Int) = position.toLong()
+
+    override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+        val v = convertView ?: LayoutInflater.from(parent.context).inflate(R.layout.item_channel, parent, false)
+            .also { Fonts.apply(it) }
+        val e = items[position]
+        v.findViewById<TextView>(R.id.chNum).text = ""
+        v.findViewById<ImageView>(R.id.chLogo).apply {
+            tag = null
+            setImageDrawable(dev.yash.zapper.data.Apps.icon(ctx, e.pkg))
+        }
+        v.findViewById<TextView>(R.id.chName).text = e.label
+        v.findViewById<TextView>(R.id.chNow).apply { text = "Press OK to open"; visibility = View.VISIBLE }
+        v.findViewById<ProgressBar>(R.id.chProgress).visibility = View.GONE
+        return v
+    }
+}

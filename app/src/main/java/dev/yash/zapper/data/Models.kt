@@ -23,7 +23,7 @@ class CatchupInfo(val type: String, val source: String?, val days: Int)
 class Programme(val start: Long, val stop: Long, val title: String, val desc: String?)
 
 class Group(val title: String, val channels: List<Channel>, val kind: Kind) {
-    enum class Kind { FAVORITES, ALL, LIVE, MOVIES, SERIES }
+    enum class Kind { FAVORITES, ALL, LIVE, MOVIES, SERIES, APPS }
 }
 
 /** Binary-search helpers over a start-sorted programme list. */

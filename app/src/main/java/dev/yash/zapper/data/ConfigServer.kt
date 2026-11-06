@@ -128,6 +128,7 @@ object ConfigServer {
             )
         )
         if (v("newmac") != null) Repo.regenerateMac()
+        if (v("apps_present") != null) Repo.saveShownApps(f.filter { it.first == "app" }.map { it.second })
         Repo.main.post { listener?.invoke() }
     }
 
@@ -146,6 +147,13 @@ object ConfigServer {
     private fun parseForm(body: String): List<Pair<String, String>> = body.split('&').mapNotNull {
         val i = it.indexOf('=')
         if (i <= 0) null else URLDecoder.decode(it.substring(0, i), "UTF-8") to URLDecoder.decode(it.substring(i + 1), "UTF-8")
+    }
+
+    private fun appRows(): String {
+        val shown = Apps.shown(app).map { it.pkg }.toSet()
+        return Apps.launchable(app).joinToString("") {
+            "<label class='row'><input type='checkbox' name='app' value='${esc(it.pkg)}' ${checked(it.pkg in shown)}> ${esc(it.label)}</label>"
+        }
     }
 
     private fun esc(s: String) = s.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;")
@@ -208,6 +216,11 @@ object ConfigServer {
               <label class="row"><input type="checkbox" name="hidevod" ${checked(Repo.hideVod)}> Hide movies &amp; series</label>
               <p class="muted">Untick categories to hide them. Hidden channels disappear from lists and the guide; favorites still work.</p>
               $groupRows
+
+              <h3>Apps inside Zapper</h3>
+              <p class="muted">Ticked apps appear under 📱 Apps in the channel list, so nobody needs the Fire TV home screen.</p>
+              <input type="hidden" name="apps_present" value="1">
+              <div class="groups">${appRows()}</div>
 
               <h3>Advanced</h3>
               <details><summary>Box identity (only if your provider locked the MAC to a device)</summary>

@@ -55,6 +55,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
 
     private val groupAdapter = GroupAdapter()
     private val channelAdapter = ChannelAdapter()
+    private lateinit var appsAdapter: AppsAdapter
     private lateinit var timeFmt: DateFormat
     private val main get() = Repo.main
 
@@ -117,6 +118,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         cardButton = findViewById(R.id.cardButton)
         cardSpinner = findViewById(R.id.cardSpinner)
 
+        appsAdapter = AppsAdapter(this)
         guide.listener = this
         groupsList.adapter = groupAdapter
         channelsList.adapter = channelAdapter
@@ -141,6 +143,13 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
             channelsList.requestFocus()
         }
         channelsList.setOnItemClickListener { _, _, position, _ ->
+            if (channelsList.adapter === appsAdapter) {
+                appsAdapter.items.getOrNull(position)?.let { e ->
+                    hideOverlays()
+                    if (!dev.yash.zapper.data.Apps.open(this, e.pkg)) toast("Couldn't open ${e.label}")
+                }
+                return@setOnItemClickListener
+            }
             val ch = channelAdapter.items.getOrNull(position) ?: return@setOnItemClickListener
             hideOverlays()
             playChannel(ch, browseGroup)
@@ -152,11 +161,22 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         if (pendingGroup != browseGroup || channelAdapter.items !== groups.getOrNull(pendingGroup)?.channels) {
             browseGroup = pendingGroup
             groupAdapter.activeIndex = browseGroup
-            channelAdapter.items = groups.getOrNull(browseGroup)?.channels ?: emptyList()
-            updateEmptyHint()
+            showGroupContent(groups.getOrNull(browseGroup))
             val idx = channelAdapter.items.indexOfFirst { it.url == current?.url }
             channelsList.setSelection(if (idx >= 0) idx else 0)
         }
+    }
+
+    /** Fills the right-hand list with the group's channels, or with apps for the Apps entry. */
+    private fun showGroupContent(g: Group?) {
+        if (g?.kind == Group.Kind.APPS) {
+            appsAdapter.items = dev.yash.zapper.data.Apps.shown(this)
+            if (channelsList.adapter !== appsAdapter) channelsList.adapter = appsAdapter
+        } else {
+            if (channelsList.adapter !== channelAdapter) channelsList.adapter = channelAdapter
+            channelAdapter.items = g?.channels ?: emptyList()
+        }
+        updateEmptyHint()
     }
 
     private fun updateEmptyHint() {
@@ -166,6 +186,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
             g == null -> ""
             g.kind == Group.Kind.MOVIES -> "🎬\n\nPress OK to open Movies"
             g.kind == Group.Kind.SERIES -> "📺\n\nPress OK to open Series"
+            g.kind == Group.Kind.APPS -> if (appsAdapter.count == 0) "No apps chosen yet.\n\nPick them on the phone settings page\nunder “Apps inside Zapper”." else ""
             g.kind == Group.Kind.FAVORITES && g.channels.isEmpty() -> "No favorites yet.\n\nPick a channel in another category\nand press ☰ to add it here."
             g.channels.isEmpty() -> "No channels here."
             else -> ""
@@ -367,7 +388,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         groupAdapter.items = groups
         playGroup = playGroup.coerceAtMost(groups.size - 1)
         browseGroup = browseGroup.coerceAtMost(groups.size - 1)
-        channelAdapter.items = groups.getOrNull(browseGroup)?.channels ?: emptyList()
+        showGroupContent(groups.getOrNull(browseGroup))
         if (mode == Mode.GUIDE) hideOverlays()
     }
 
@@ -509,8 +530,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         browseGroup = gi
         pendingGroup = gi
         groupAdapter.items = groups
-        channelAdapter.items = groups.getOrNull(gi)?.channels ?: emptyList()
-        updateEmptyHint()
+        showGroupContent(groups.getOrNull(gi))
         groupAdapter.activeIndex = gi
         findViewById<TextView>(R.id.panelClock).text = fmt(System.currentTimeMillis())
         groupsList.setSelection(gi)
@@ -582,7 +602,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         toast(if (added) "★ Added ${ch.name} to Favorites" else "Removed ${ch.name} from Favorites")
         groups = Repo.groups()
         groupAdapter.items = groups
-        if (mode == Mode.LIST) channelAdapter.items = groups.getOrNull(browseGroup)?.channels ?: emptyList()
+        if (mode == Mode.LIST) showGroupContent(groups.getOrNull(browseGroup))
         channelAdapter.notifyDataSetChanged()
         guide.invalidate()
     }
