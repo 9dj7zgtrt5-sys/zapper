@@ -7,6 +7,14 @@
     android:paddingStart="30dp"
     android:paddingEnd="26dp">
 
+    <ImageView
+        android:id="@+id/groupIcon"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginEnd="14dp"
+        android:tint="@color/text_secondary_sel"
+        android:visibility="gone" />
+
     <TextView
         android:id="@+id/groupName"
         android:layout_width="0dp"

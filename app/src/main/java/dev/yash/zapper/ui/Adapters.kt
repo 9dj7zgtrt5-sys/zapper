@@ -31,6 +31,15 @@ class GroupAdapter : BaseAdapter() {
             .also { Fonts.apply(it) }
         val g = items[position]
         v.findViewById<TextView>(R.id.groupName).text = Display.pretty(g.title)
+        val icon = when (g.kind) {
+            Group.Kind.RECENT -> R.drawable.ic_history
+            Group.Kind.FAVORITES -> R.drawable.ic_star
+            Group.Kind.ALL -> R.drawable.ic_list
+            else -> 0
+        }
+        v.findViewById<ImageView>(R.id.groupIcon).apply {
+            if (icon != 0) { setImageResource(icon); visibility = View.VISIBLE } else visibility = View.GONE
+        }
         v.findViewById<TextView>(R.id.groupCount).text = when (g.kind) {
             Group.Kind.MOVIES -> movieCount?.let { "%,d".format(it) } ?: "›"
             Group.Kind.SERIES -> seriesCount?.let { "%,d".format(it) } ?: "›"
@@ -92,7 +101,7 @@ class ChannelAdapter : BaseAdapter() {
 }
 
 /** Simple text rows (categories, seasons, episodes) in Lexend. */
-class RowAdapter(private val rows: List<String>) : BaseAdapter() {
+class RowAdapter(private val rows: List<String>, private val icons: List<Int> = emptyList()) : BaseAdapter() {
     override fun getCount() = rows.size
     override fun getItem(position: Int) = rows[position]
     override fun getItemId(position: Int) = position.toLong()
@@ -100,6 +109,18 @@ class RowAdapter(private val rows: List<String>) : BaseAdapter() {
         val v = (convertView ?: LayoutInflater.from(parent.context).inflate(R.layout.item_row, parent, false)
             .also { Fonts.apply(it) }) as TextView
         v.text = rows[position]
+        val icon = icons.getOrNull(position) ?: 0
+        if (icon != 0) {
+            val ctx = v.context
+            val size = (24 * ctx.resources.displayMetrics.density).toInt()
+            @Suppress("DEPRECATION")
+            val d = ctx.resources.getDrawable(icon).mutate().apply {
+                setBounds(0, 0, size, size)
+                setTintList(ctx.resources.getColorStateList(R.color.text_secondary_sel))
+            }
+            v.setCompoundDrawables(d, null, null, null)
+            v.compoundDrawablePadding = (14 * ctx.resources.displayMetrics.density).toInt()
+        } else v.setCompoundDrawables(null, null, null, null)
         return v
     }
 }

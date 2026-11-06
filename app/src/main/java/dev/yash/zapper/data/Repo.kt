@@ -223,6 +223,20 @@ object Repo {
         return added
     }
 
+    // ---- recently watched ----
+    private const val RECENT_MAX = 12
+
+    val recentUrls: List<String>
+        get() = prefs.getString("recent", "")!!.split('\n').filter { it.isNotEmpty() }
+
+    /** Moves a channel to the front of "Recently watched". */
+    fun addRecent(url: String) {
+        val list = recentUrls.toMutableList()
+        list.remove(url)
+        list.add(0, url)
+        prefs.edit().putString("recent", list.take(RECENT_MAX).joinToString("\n")).apply()
+    }
+
     // ---- groups ----
     /** Visible groups: Favorites, All channels, then playlist groups (minus hidden ones). */
     fun groups(): List<Group> {
@@ -236,14 +250,11 @@ object Repo {
         val byUrl = HashMap<String, Channel>()
         for (c in allLive) if (!byUrl.containsKey(c.url)) byUrl[c.url] = c
         val out = ArrayList<Group>()
-        out.add(Group("★ Favorites", favorites.mapNotNull { byUrl[it] }, Group.Kind.FAVORITES))
-        out.add(Group("All channels", live, Group.Kind.ALL))
-        val hasVod = isPortal || all.any { it.isVod }
-        if (hasVod && !hideVod) {
-            out.add(Group("🎬 Movies", emptyList(), Group.Kind.MOVIES))
-            out.add(Group("📺 Series", emptyList(), Group.Kind.SERIES))
-        }
-        out.add(Group("❔ Help", emptyList(), Group.Kind.HELP))
+        // Movies, Series and Help live in the section tabs above the lists, not among channel categories.
+        val visible = live.mapTo(HashSet()) { it.url }
+        out.add(Group(RECENT_TITLE, recentUrls.filter { it in visible }.mapNotNull { byUrl[it] }, Group.Kind.RECENT))
+        out.add(Group(FAVORITES_TITLE, favorites.mapNotNull { byUrl[it] }, Group.Kind.FAVORITES))
+        out.add(Group(ALL_TITLE, live, Group.Kind.ALL))
         val liveGroups = LinkedHashMap<String, ArrayList<Channel>>()
         for (c in all) {
             if (c.isVod || c.group in hidden) continue
@@ -252,6 +263,13 @@ object Repo {
         for ((k, v) in liveGroups) out.add(Group(k, v, Group.Kind.LIVE))
         return out
     }
+
+    const val RECENT_TITLE = "Recently watched"
+    const val FAVORITES_TITLE = "Favorites"
+    const val ALL_TITLE = "All channels"
+
+    /** Whether Movies and Series exist for this source and aren't switched off. */
+    val hasVod: Boolean get() = !hideVod && (isPortal || channels.any { it.isVod })
 
     /** All group names in the playlist with channel counts (for the phone settings page). */
     fun allGroupNames(): List<Pair<String, Int>> {

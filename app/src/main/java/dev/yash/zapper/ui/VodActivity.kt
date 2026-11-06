@@ -98,7 +98,7 @@ class VodActivity : Activity() {
         series = intent.getBooleanExtra(EXTRA_SERIES, false)
         searchBox = findViewById(R.id.vodSearch)
         findViewById<TextView>(R.id.vodHint).text =
-            Display.hints("OK" to "Open", "◀" to "Categories", "▲" to "Search box", "Back" to "Live TV")
+            Display.hints("OK" to "Open", "◀" to "Categories", "▲" to "Live TV · Movies · Series", "Back" to "Live TV")
         searchBox.setOnEditorActionListener { _, actionId, event ->
             val enter = event != null && event.keyCode == android.view.KeyEvent.KEYCODE_ENTER &&
                 event.action == android.view.KeyEvent.ACTION_DOWN
@@ -106,7 +106,18 @@ class VodActivity : Activity() {
                 actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE || enter
             ) { runSearch(searchBox.text.toString()); true } else false
         }
-        findViewById<TextView>(R.id.vodTitle).text = if (series) "Series" else "Movies"
+        val tabs = SectionTabs.build(this, findViewById(R.id.vodTabs), if (series) SectionTabs.Section.SERIES else SectionTabs.Section.MOVIES, help = false) { s ->
+            when (s) {
+                SectionTabs.Section.LIVE -> finish()
+                SectionTabs.Section.MOVIES, SectionTabs.Section.SERIES -> {
+                    startActivity(Intent(this, VodActivity::class.java).putExtra(EXTRA_SERIES, s == SectionTabs.Section.SERIES))
+                    finish()
+                    overridePendingTransition(0, 0)
+                }
+                SectionTabs.Section.HELP -> Unit
+            }
+        }
+        tabs.values.forEach { it.nextFocusDownId = R.id.vodCategories }
         subtitle = findViewById(R.id.vodSubtitle)
         categoriesList = findViewById(R.id.vodCategories)
         grid = findViewById(R.id.vodGrid)
@@ -168,24 +179,59 @@ class VodActivity : Activity() {
         }
     }
 
-    private fun continueItems() = ResumeStore.asItems()
+    private fun iconFor(id: String) = when (id) {
+        CONTINUE -> R.drawable.ic_history
+        SEARCH -> R.drawable.ic_search
+        else -> 0
+    }
+
+    /**
+     * Things to pick up again in this section, newest first: movies here, episodes under Series
+     * (one per show, the latest episode, titled "Show · S2 E4").
+     */
+    private fun continueItems(): List<VodItem> {
+        val seen = HashSet<String>()
+        return ResumeStore.all().filter { e ->
+            val isEpisode = e.series != null || (e.subtitle?.contains("Episode", true) == true)
+            val finished = e.duration > 0 && e.position >= e.duration - 60_000
+            isEpisode == series && !finished && seen.add(e.title)
+        }.map {
+            val short = it.subtitle?.let { s -> shortEpisode(s) }
+            VodItem(it.key, if (series && short != null) "${it.title} · $short" else it.title, it.poster, it.subtitle,
+                null, null, null, 0, false, it.cmd, resume = it)
+        }
+    }
+
+    /** "Season 2 · Episode 4" → "S2 E4". */
+    private fun shortEpisode(s: String): String? {
+        val season = Regex("(?i)season\\s*(\\d+)").find(s)?.groupValues?.get(1)
+        val ep = Regex("(?i)episode\\s*(\\d+)").find(s)?.groupValues?.get(1)
+        return when {
+            season != null && ep != null -> "S$season E$ep"
+            ep != null -> "Ep $ep"
+            else -> null
+        }
+    }
 
     private fun onCategories(cats: List<VodCategory>?, noSeriesSection: Boolean, err: String? = null) {
         showLoading(false)
         if (cats == null) { showEmpty("Couldn't load the list.\nCheck the internet and VPN, then try again.\n\n(${err ?: "unknown error"})"); return }
         if (noSeriesSection) { showEmpty("On this service, series are listed under Movies."); return }
         val list = ArrayList<VodCategory>()
-        list.add(VodCategory(SEARCH, "🔍  Search"))
-        if (ResumeStore.all().isNotEmpty()) list.add(VodCategory(CONTINUE, "▶  Continue watching"))
+        val resume = continueItems()
+        if (resume.isNotEmpty()) list.add(VodCategory(CONTINUE, "Continue watching"))
+        list.add(VodCategory(SEARCH, "Search"))
         list.addAll(cats.filter { it.id == "*" || Repo.vodCategoryVisible(series, it.title) }.map { VodCategory(it.id, Display.pretty(it.title)) })
         categories = list
         if (cats.isEmpty()) { showEmpty("Nothing here yet."); return }
-        categoriesList.adapter = RowAdapter(list.map { it.title })
-        val start = if (list.size > 1) 1 else 0
+        categoriesList.adapter = RowAdapter(list.map { it.title }, list.map { iconFor(it.id) })
+        // Land on "Continue watching" when there is something to resume (first poster focused: OK resumes);
+        // otherwise on the first real category.
+        val start = if (resume.isNotEmpty()) 0 else list.indexOfFirst { it.id != SEARCH }.takeIf { it >= 0 } ?: 0
         categoriesList.setSelection(start)
-        categoriesList.requestFocus()
         pending = start
         openPending.run()
+        if (resume.isNotEmpty()) { grid.requestFocus(); grid.setSelection(0) } else categoriesList.requestFocus()
     }
 
     private var pending = 0
@@ -199,7 +245,8 @@ class VodActivity : Activity() {
         grid.setPadding(grid.paddingLeft, ((if (isSearch) 84 else 8) * d).toInt(), grid.paddingRight, grid.paddingBottom)
         subtitle.text = when {
             isSearch -> if (query.isEmpty()) "Find a title" else "Results for “$query”"
-            else -> cat.title.removePrefix("▶  ")
+            cat.id == CONTINUE -> "Pick up where you left off"
+            else -> cat.title
         }
         generation++
         posters.items.clear()

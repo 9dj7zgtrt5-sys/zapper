@@ -90,7 +90,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         setContentView(R.layout.activity_main)
         Fonts.apply(window.decorView)
         findViewById<TextView>(R.id.listHint).text = Display.hints(
-            "OK" to "Watch", "Hold OK" to "Favorite", "◀" to "Categories", "▶" to "TV guide", "Back" to "Close",
+            "OK" to "Watch", "Hold OK" to "Favorite", "◀" to "Categories", "▲" to "Movies & Series", "▶" to "TV guide", "Back" to "Close",
         )
         timeFmt = android.text.format.DateFormat.getTimeFormat(this)
 
@@ -120,6 +120,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         cardSpinner = findViewById(R.id.cardSpinner)
 
         appsAdapter = AppsAdapter(this)
+        buildTabs()
         guide.listener = this
         groupsList.adapter = groupAdapter
         channelsList.adapter = channelAdapter
@@ -163,6 +164,44 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         }
     }
 
+    private var tabViews: Map<SectionTabs.Section, View> = emptyMap()
+
+    /** Live TV · Movies · Series · Help across the top of the channel list. */
+    private fun buildTabs() {
+        tabViews = SectionTabs.build(this, findViewById(R.id.sectionTabs), SectionTabs.Section.LIVE, help = true) { s ->
+            when (s) {
+                SectionTabs.Section.MOVIES, SectionTabs.Section.SERIES -> {
+                    hideOverlays()
+                    startActivity(Intent(this, VodActivity::class.java).putExtra(VodActivity.EXTRA_SERIES, s == SectionTabs.Section.SERIES))
+                }
+                SectionTabs.Section.HELP -> showHelp()
+                SectionTabs.Section.LIVE -> Unit
+            }
+        }
+        val live = tabViews[SectionTabs.Section.LIVE]
+        for (v in tabViews.values) v.nextFocusDownId = R.id.channelsList
+        live?.setOnClickListener { channelsList.requestFocus() }
+        groupsList.nextFocusUpId = live?.id ?: View.NO_ID
+        channelsList.nextFocusUpId = live?.id ?: View.NO_ID
+        // Tabs count as "using the list", so the panel doesn't close underneath.
+        for (v in tabViews.values) v.setOnFocusChangeListener { _, has -> if (has) bumpIdle() }
+    }
+
+    /** Index of "All channels" (number entry, zapping from Recently watched). */
+    private val allIndex: Int get() = groups.indexOfFirst { it.kind == Group.Kind.ALL }.coerceAtLeast(0)
+
+    /** "Recently watched" changes as you zap: rebuild just that group. */
+    private fun refreshRecent() {
+        val i = groups.indexOfFirst { it.kind == Group.Kind.RECENT }
+        if (i < 0) return
+        val all = groups.getOrNull(allIndex)?.channels ?: return
+        val byUrl = all.associateBy { it.url }
+        val g = Group(groups[i].title, Repo.recentUrls.mapNotNull { byUrl[it] }, Group.Kind.RECENT)
+        groups = groups.toMutableList().also { it[i] = g }
+        groupAdapter.items = groups
+        if (browseGroup == i) showGroupContent(g)
+    }
+
     private var pendingGroup = 0
     private val applyGroup = Runnable {
         if (pendingGroup != browseGroup || channelAdapter.items !== groups.getOrNull(pendingGroup)?.channels) {
@@ -195,6 +234,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
             g.kind == Group.Kind.SERIES -> "📺\n\nPress OK to open Series"
             g.kind == Group.Kind.HELP -> "❔\n\nPress OK to see how the remote works"
             g.kind == Group.Kind.APPS -> if (appsAdapter.count == 0) "No apps chosen yet.\n\nPick them on the phone settings page\nunder “Apps inside Zapper”." else ""
+            g.kind == Group.Kind.RECENT && g.channels.isEmpty() -> "Channels you watch will appear here,\nnewest first."
             g.kind == Group.Kind.FAVORITES && g.channels.isEmpty() -> "No favorites yet.\n\nPick a channel in another category\nand press ☰ to add it here."
             g.channels.isEmpty() -> "No channels here."
             else -> ""
@@ -364,15 +404,13 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         }
         if (cardKind == Card.LOADING || cardKind == Card.ERROR) hideCard()
         groups = Repo.groups()
+        buildTabs()
         groupAdapter.items = groups
         val lastUrl = current?.url ?: Repo.lastChannelUrl
         var gi = groups.indexOfFirst { it.title == Repo.lastGroup }
-        if (gi < 0 || groups[gi].channels.none { it.url == lastUrl }) {
-            gi = if (groups[0].channels.any { it.url == lastUrl }) 0 else 1
-        }
+        if (gi < 0 || groups[gi].kind == Group.Kind.RECENT || groups[gi].channels.none { it.url == lastUrl }) gi = allIndex
         val ch = groups.getOrNull(gi)?.channels?.firstOrNull { it.url == lastUrl }
-            ?: groups[0].channels.firstOrNull()?.also { gi = 0 }
-            ?: groups.getOrNull(1)?.channels?.firstOrNull()?.also { gi = 1 }
+            ?: groups.getOrNull(allIndex)?.channels?.firstOrNull()?.also { gi = allIndex }
         browseGroup = gi
         if (ch != null && vodTitle == null && !vpnBlocked) playChannel(ch, gi)
         loadVodCounts()
@@ -406,6 +444,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
 
     private fun applyDisplaySettings() {
         groups = Repo.groups()
+        buildTabs()
         groupAdapter.items = groups
         playGroup = playGroup.coerceAtMost(groups.size - 1)
         browseGroup = browseGroup.coerceAtMost(groups.size - 1)
@@ -422,7 +461,9 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         }
         if (current != null && current?.url != ch.url) previous = current
         current = ch
-        playGroup = groupIndex
+        // Zapping from "Recently watched" would reshuffle as you go: zap through All channels instead.
+        playGroup = if (groups.getOrNull(groupIndex)?.kind == Group.Kind.RECENT) allIndex else groupIndex
+        Repo.addRecent(ch.url)
         vodTitle = null
         needsResume = false
         channelAdapter.playingUrl = ch.url
@@ -430,7 +471,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         val resolver: ((Int) -> String?)? = if (ch.cmd != null) ({ attempt -> Repo.resolveStream(ch, attempt) }) else null
         player.play(ch.url, ch.userAgent ?: Repo.userAgent, live = true, resolver = resolver)
         Repo.lastChannelUrl = ch.url
-        Repo.lastGroup = groups.getOrNull(groupIndex)?.title
+        Repo.lastGroup = groups.getOrNull(playGroup)?.title
         showInfo()
     }
 
@@ -552,6 +593,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         infoBar.visibility = View.GONE
         guide.visibility = View.GONE
         listPanel.visibility = View.VISIBLE
+        refreshRecent()
         val gi = if (vodTitle == null) playGroup else browseGroup
         browseGroup = gi
         pendingGroup = gi
@@ -627,6 +669,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         val added = Repo.toggleFavorite(ch)
         toast(if (added) "★ Added ${Display.channelName(ch.name)} to Favorites" else "Removed ${Display.channelName(ch.name)} from Favorites")
         groups = Repo.groups()
+        buildTabs()
         groupAdapter.items = groups
         if (mode == Mode.LIST) showGroupContent(groups.getOrNull(browseGroup))
         channelAdapter.notifyDataSetChanged()
@@ -742,9 +785,9 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         digits.setLength(0)
         findViewById<TextView>(R.id.numEntry).visibility = View.GONE
         if (n == null) return@Runnable
-        val all = groups.getOrNull(1)?.channels ?: return@Runnable
+        val all = groups.getOrNull(allIndex)?.channels ?: return@Runnable
         val ch = all.firstOrNull { it.number == n }
-        if (ch != null) playChannel(ch, 1) else toast("There is no channel $n")
+        if (ch != null) playChannel(ch, allIndex) else toast("There is no channel $n")
     }
 
     private fun digitOf(keyCode: Int): Int? = when (keyCode) {
@@ -786,7 +829,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
             KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_GUIDE -> openGuide()
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_LAST_CHANNEL -> {
                 previous?.let { prev ->
-                    val gi = if (groups.getOrNull(playGroup)?.channels?.any { it.url == prev.url } == true) playGroup else 1
+                    val gi = if (groups.getOrNull(playGroup)?.channels?.any { it.url == prev.url } == true) playGroup else allIndex
                     playChannel(prev, gi)
                 } ?: showInfo()
             }
