@@ -647,6 +647,10 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
         val code = e.keyCode
         if (isPassThrough(code)) return super.dispatchKeyEvent(e)
+        if (code == KeyEvent.KEYCODE_ESCAPE) {
+            if (e.action == KeyEvent.ACTION_UP) goHome()
+            return true
+        }
         bumpIdle()
 
         // Help screen: any key closes it.
@@ -663,8 +667,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
                 backDownAt = 0
                 when {
                     held >= 3000 -> startActivity(Intent(this, SetupActivity::class.java))
-                    cardKind == Card.LOADING || cardKind == Card.VPN_WAIT -> Unit
-                    cardKind != Card.NONE -> startActivity(Intent(this, SetupActivity::class.java))
+                    cardKind != Card.NONE -> goHome()
                     else -> @Suppress("DEPRECATION") onBackPressed()
                 }
             }
@@ -775,14 +778,29 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         return true
     }
 
-    /** Back never leaves the app (use Home for that) — it only closes things. */
+    /** Back closes things; pressed again while the channel banner shows, it goes to the TV's home screen. */
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         when {
             mode != Mode.PLAYER -> hideOverlays()
             vodTitle != null -> exitVod()
-            infoBar.visibility == View.VISIBLE -> infoBar.visibility = View.GONE
-            else -> showInfo()
+            infoBar.visibility == View.VISIBLE && System.currentTimeMillis() - lastBackAt < 2500 -> goHome()
+            else -> {
+                lastBackAt = System.currentTimeMillis()
+                showInfo()
+                infoNext.text = Display.hints("Back" to "again for the home screen", "OK" to "All channels")
+            }
+        }
+    }
+
+    private var lastBackAt = 0L
+
+    /** Opens the TV's home screen (remotes over HDMI-CEC often have no working Home button). */
+    private fun goHome() {
+        try {
+            startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (_: Exception) {
+            moveTaskToBack(true)
         }
     }
 
