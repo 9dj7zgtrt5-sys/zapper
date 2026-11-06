@@ -515,7 +515,9 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         cardKind = kind
         cardAction = action
         cardTitle.text = title
-        cardBody.text = body
+        val withHint = if (kind == Card.ERROR || kind == Card.VPN_OFF || kind == Card.WELCOME)
+            "$body\n\nPress Back for settings  ·  Home to leave" else body
+        cardBody.text = withHint
         cardButton.text = button ?: ""
         cardButton.visibility = if (button != null) View.VISIBLE else View.GONE
         cardSpinner.visibility = if (spinner) View.VISIBLE else View.GONE
@@ -588,11 +590,15 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
             return true
         }
 
-        // Message card: only OK does anything.
+        // Message card: OK runs its button, Back opens settings (so nobody gets stuck on it).
         if (cardKind != Card.NONE) {
-            if (e.action == KeyEvent.ACTION_DOWN && e.repeatCount == 0 &&
-                (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER || code == KeyEvent.KEYCODE_NUMPAD_ENTER)
-            ) cardAction?.invoke()
+            if (e.action == KeyEvent.ACTION_DOWN && e.repeatCount == 0) {
+                when (code) {
+                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> cardAction?.invoke()
+                    KeyEvent.KEYCODE_BACK -> if (cardKind != Card.LOADING && cardKind != Card.VPN_WAIT)
+                        startActivity(Intent(this, SetupActivity::class.java))
+                }
+            }
             return true
         }
         return super.dispatchKeyEvent(e)
