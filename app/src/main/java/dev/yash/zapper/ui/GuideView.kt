@@ -122,13 +122,38 @@ class GuideView(ctx: Context, attrs: AttributeSet?) : View(ctx, attrs) {
                 if (selTime < viewStart) viewStart = TimeUtil.floorHalfHour(selTime)
             }
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                channels.getOrNull(row)?.let { listener?.onGuidePick(it, selectedProgramme()) }
+                // Tap = watch (on release), hold = favourite (remotes without a ☰ button).
+                if (event.repeatCount == 0) { event.startTracking(); centerHeld = false }
+                return true
             }
             KeyEvent.KEYCODE_MENU -> channels.getOrNull(row)?.let { listener?.onGuideFavorite(it) }
             else -> return super.onKeyDown(keyCode, event)
         }
         invalidate()
         return true
+    }
+
+    private var centerHeld = false
+
+    private fun isCenter(k: Int) = k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER || k == KeyEvent.KEYCODE_NUMPAD_ENTER
+
+    override fun onKeyLongPress(keyCode: Int, event: KeyEvent): Boolean {
+        if (isCenter(keyCode)) {
+            centerHeld = true
+            channels.getOrNull(row)?.let { listener?.onGuideFavorite(it) }
+            invalidate()
+            return true
+        }
+        return super.onKeyLongPress(keyCode, event)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
+        if (isCenter(keyCode)) {
+            if (!centerHeld && !event.isCanceled) channels.getOrNull(row)?.let { listener?.onGuidePick(it, selectedProgramme()) }
+            centerHeld = false
+            return true
+        }
+        return super.onKeyUp(keyCode, event)
     }
 
     private fun moveRows(delta: Int) {
@@ -154,7 +179,7 @@ class GuideView(ctx: Context, attrs: AttributeSet?) : View(ctx, attrs) {
         val ch = channels.getOrNull(row)
         val sel = selectedProgramme()
         val left = pad * 2
-        val hint = "OK Watch      ☰ Favorite      Back Close"
+        val hint = "OK Watch      Hold OK Favorite      Back Close"
         val hintW = dim.measureText(hint) + pad * 3
         c.drawText(hint, w - left - dim.measureText(hint), pad + 30 * dp, dim)
         if (ch == null) {

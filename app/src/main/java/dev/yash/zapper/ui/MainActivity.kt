@@ -78,6 +78,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
     private var vpnBlocked = false
     private var vpnWaitSince = 0L
     private var menuDownAt = 0L
+    private var backDownAt = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -89,7 +90,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         setContentView(R.layout.activity_main)
         Fonts.apply(window.decorView)
         findViewById<TextView>(R.id.listHint).text = Display.hints(
-            "OK" to "Watch", "◀" to "Categories", "▶" to "TV guide", "☰" to "Add to favorites", "Back" to "Close",
+            "OK" to "Watch", "Hold OK" to "Favorite", "◀" to "Categories", "▶" to "TV guide", "Back" to "Close",
         )
         timeFmt = android.text.format.DateFormat.getTimeFormat(this)
 
@@ -133,6 +134,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         }
         groupsList.setOnItemClickListener { _, _, position, _ ->
             val kind = groups.getOrNull(position)?.kind
+            if (kind == Group.Kind.HELP) { hideOverlays(); showHelp(); return@setOnItemClickListener }
             if (kind == Group.Kind.MOVIES || kind == Group.Kind.SERIES) {
                 hideOverlays()
                 startActivity(Intent(this, VodActivity::class.java).putExtra(VodActivity.EXTRA_SERIES, kind == Group.Kind.SERIES))
@@ -141,6 +143,11 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
             pendingGroup = position
             applyGroup.run()
             channelsList.requestFocus()
+        }
+        channelsList.setOnItemLongClickListener { _, _, position, _ ->
+            val ch = (channelsList.adapter as? ChannelAdapter)?.items?.getOrNull(position)
+            if (ch != null && !ch.isVod) toggleFavorite(ch)
+            true
         }
         channelsList.setOnItemClickListener { _, _, position, _ ->
             if (channelsList.adapter === appsAdapter) {
@@ -186,6 +193,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
             g == null -> ""
             g.kind == Group.Kind.MOVIES -> "🎬\n\nPress OK to open Movies"
             g.kind == Group.Kind.SERIES -> "📺\n\nPress OK to open Series"
+            g.kind == Group.Kind.HELP -> "❔\n\nPress OK to see how the remote works"
             g.kind == Group.Kind.APPS -> if (appsAdapter.count == 0) "No apps chosen yet.\n\nPick them on the phone settings page\nunder “Apps inside Zapper”." else ""
             g.kind == Group.Kind.FAVORITES && g.channels.isEmpty() -> "No favorites yet.\n\nPick a channel in another category\nand press ☰ to add it here."
             g.channels.isEmpty() -> "No channels here."
@@ -644,6 +652,22 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         // Help screen: any key closes it.
         if (help.visibility == View.VISIBLE) {
             if (e.action == KeyEvent.ACTION_DOWN) help.visibility = View.GONE
+            return true
+        }
+
+        // Back while watching or on a message: tap = normal, hold 3 s = settings (remotes without ☰).
+        if (code == KeyEvent.KEYCODE_BACK && (mode == Mode.PLAYER || cardKind != Card.NONE) && help.visibility != View.VISIBLE) {
+            if (e.action == KeyEvent.ACTION_DOWN && e.repeatCount == 0) backDownAt = e.eventTime
+            if (e.action == KeyEvent.ACTION_UP && backDownAt > 0) {
+                val held = e.eventTime - backDownAt
+                backDownAt = 0
+                when {
+                    held >= 3000 -> startActivity(Intent(this, SetupActivity::class.java))
+                    cardKind == Card.LOADING || cardKind == Card.VPN_WAIT -> Unit
+                    cardKind != Card.NONE -> startActivity(Intent(this, SetupActivity::class.java))
+                    else -> @Suppress("DEPRECATION") onBackPressed()
+                }
+            }
             return true
         }
 

@@ -201,6 +201,7 @@ object Repo {
             out.add(Group("📺 Series", emptyList(), Group.Kind.SERIES))
         }
         out.add(Group("📱 Apps", emptyList(), Group.Kind.APPS))
+        out.add(Group("❔ Help", emptyList(), Group.Kind.HELP))
         val liveGroups = LinkedHashMap<String, ArrayList<Channel>>()
         for (c in all) {
             if (c.isVod || c.group in hidden) continue

@@ -266,8 +266,8 @@
                 <TextView android:text="Close a menu" android:textColor="@color/text" android:textSize="26sp" />
             </TableRow>
             <TableRow android:paddingTop="8dp" android:paddingBottom="8dp">
-                <TextView android:text="☰" android:minWidth="120dp" android:textColor="@color/focus" android:textSize="26sp" android:textStyle="bold" />
-                <TextView android:text="In the channel list: add to Favorites ★" android:textColor="@color/text" android:textSize="26sp" />
+                <TextView android:text="Hold OK" android:minWidth="120dp" android:textColor="@color/focus" android:textSize="26sp" android:textStyle="bold" />
+                <TextView android:text="On a channel: add it to Favorites ★" android:textColor="@color/text" android:textSize="26sp" />
             </TableRow>
         </TableLayout>
 

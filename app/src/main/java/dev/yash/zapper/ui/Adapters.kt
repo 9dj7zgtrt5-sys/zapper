@@ -34,6 +34,7 @@ class GroupAdapter : BaseAdapter() {
         v.findViewById<TextView>(R.id.groupCount).text = when (g.kind) {
             Group.Kind.MOVIES -> movieCount?.let { "%,d".format(it) } ?: "›"
             Group.Kind.SERIES -> seriesCount?.let { "%,d".format(it) } ?: "›"
+            Group.Kind.APPS, Group.Kind.HELP -> "›"
             else -> "%,d".format(g.channels.size)
         }
         v.setBackgroundResource(if (position == activeIndex) R.drawable.group_active else 0)
