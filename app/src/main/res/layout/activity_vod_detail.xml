@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0D1014"
+    android:orientation="horizontal"
+    android:padding="44dp">
+
+    <FrameLayout
+        android:layout_width="240dp"
+        android:layout_height="360dp"
+        android:background="@drawable/poster_placeholder">
+
+        <ImageView
+            android:id="@+id/detailPoster"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop" />
+    </FrameLayout>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_marginStart="36dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/detailTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:textColor="#FFFFFF"
+            android:textSize="34sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/detailMeta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="#8AB4F8"
+            android:textSize="20sp" />
+
+        <TextView
+            android:id="@+id/detailDesc"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:ellipsize="end"
+            android:lineSpacingExtra="4dp"
+            android:maxLines="6"
+            android:textColor="#C8CCD0"
+            android:textSize="19sp" />
+
+        <LinearLayout
+            android:id="@+id/movieButtons"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="28dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/playButton"
+                style="@style/TvButton"
+                android:minHeight="64dp"
+                android:textSize="22sp" />
+
+            <Button
+                android:id="@+id/restartButton"
+                style="@style/TvButton"
+                android:layout_marginStart="16dp"
+                android:minHeight="64dp"
+                android:text="Start from beginning"
+                android:textSize="22sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/seriesBox"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="18dp"
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <ListView
+                android:id="@+id/seasonsList"
+                android:layout_width="220dp"
+                android:layout_height="match_parent"
+                android:background="#FF080A0D"
+                android:divider="@null"
+                android:listSelector="@drawable/list_selector"
+                android:scrollbars="none" />
+
+            <ListView
+                android:id="@+id/episodesList"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="12dp"
+                android:layout_weight="1"
+                android:divider="@null"
+                android:listSelector="@drawable/list_selector"
+                android:scrollbars="none" />
+        </LinearLayout>
+
+        <ProgressBar
+            android:id="@+id/detailLoading"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginTop="24dp"
+            android:indeterminate="true"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/detailHint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:textColor="#AEB4BA"
+            android:textSize="17sp" />
+    </LinearLayout>
+</LinearLayout>

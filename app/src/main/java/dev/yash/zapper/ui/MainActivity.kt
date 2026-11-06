@@ -126,6 +126,12 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
         groupsList.setOnItemClickListener { _, _, position, _ ->
+            val kind = groups.getOrNull(position)?.kind
+            if (kind == Group.Kind.MOVIES || kind == Group.Kind.SERIES) {
+                hideOverlays()
+                startActivity(Intent(this, VodActivity::class.java).putExtra(VodActivity.EXTRA_SERIES, kind == Group.Kind.SERIES))
+                return@setOnItemClickListener
+            }
             pendingGroup = position
             applyGroup.run()
             channelsList.requestFocus()

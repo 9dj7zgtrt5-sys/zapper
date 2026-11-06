@@ -14,8 +14,9 @@ import java.util.concurrent.Executors
 
 /** Small logo loader with memory + disk cache (no third-party image library). */
 object Logos {
-    private const val TARGET_PX = 96
-    private val mem = object : LruCache<String, Bitmap>(12 * 1024 * 1024) {
+    const val LOGO_PX = 96
+    const val POSTER_PX = 330
+    private val mem = object : LruCache<String, Bitmap>(28 * 1024 * 1024) {
         override fun sizeOf(key: String, value: Bitmap) = value.byteCount
     }
     private val failed = Collections.synchronizedSet(HashSet<String>())
@@ -27,32 +28,33 @@ object Logos {
         if (dir == null) dir = File(ctx.cacheDir, "logos").apply { mkdirs() }
     }
 
-    fun cached(url: String?): Bitmap? = url?.let { mem.get(it) }
+    fun cached(url: String?, px: Int = LOGO_PX): Bitmap? = url?.let { mem.get("$px|$it") }
 
     /** Main thread only. */
-    fun get(url: String?, cb: (Bitmap?) -> Unit) {
+    fun get(url: String?, px: Int = LOGO_PX, cb: (Bitmap?) -> Unit) {
         if (url.isNullOrBlank() || failed.contains(url)) { cb(null); return }
-        mem.get(url)?.let { cb(it); return }
-        val waiting = pending[url]
+        val key = "$px|$url"
+        mem.get(key)?.let { cb(it); return }
+        val waiting = pending[key]
         if (waiting != null) { waiting.add(cb); return }
-        pending[url] = arrayListOf(cb)
+        pending[key] = arrayListOf(cb)
         pool.execute {
-            val bmp = try { load(url) } catch (_: Throwable) { null }
+            val bmp = try { load(url, px) } catch (_: Throwable) { null }
             Repo.main.post {
-                if (bmp != null) mem.put(url, bmp) else failed.add(url)
-                pending.remove(url)?.forEach { it(bmp) }
+                if (bmp != null) mem.put(key, bmp) else failed.add(url)
+                pending.remove(key)?.forEach { it(bmp) }
             }
         }
     }
 
-    fun into(iv: ImageView, url: String?) {
+    fun into(iv: ImageView, url: String?, px: Int = LOGO_PX) {
         iv.tag = url
-        val hit = cached(url)
+        val hit = cached(url, px)
         iv.setImageBitmap(hit)
-        if (hit == null && !url.isNullOrBlank()) get(url) { b -> if (iv.tag == url) iv.setImageBitmap(b) }
+        if (hit == null && !url.isNullOrBlank()) get(url, px) { b -> if (iv.tag == url) iv.setImageBitmap(b) }
     }
 
-    private fun load(url: String): Bitmap? {
+    private fun load(url: String, px: Int): Bitmap? {
         val d = dir ?: return null
         val md = MessageDigest.getInstance("MD5").digest(url.toByteArray())
         val f = File(d, md.joinToString("") { "%02x".format(it) })
@@ -61,8 +63,11 @@ object Logos {
         BitmapFactory.decodeFile(f.path, bounds)
         if (bounds.outWidth <= 0) { f.delete(); return null }
         var sample = 1
-        while (bounds.outHeight / (sample * 2) >= TARGET_PX && bounds.outWidth / (sample * 2) >= TARGET_PX) sample *= 2
-        val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+        while (bounds.outHeight / (sample * 2) >= px && bounds.outWidth / (sample * 2) >= px / 2) sample *= 2
+        val opts = BitmapFactory.Options().apply {
+            inSampleSize = sample
+            if (px > LOGO_PX) inPreferredConfig = Bitmap.Config.RGB_565
+        }
         return BitmapFactory.decodeFile(f.path, opts)
     }
 }

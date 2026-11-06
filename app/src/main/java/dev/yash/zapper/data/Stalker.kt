@@ -219,6 +219,116 @@ class StalkerClient(portal: String, mac: String) {
         call("type=watchdog&action=get_events&event_active_id=0&init=0&cur_play_type=1")
     }
 
+    // ---------------- Movies & series ----------------
+
+    /** @param type "vod" (movies) or "series" */
+    fun vodCategories(type: String): List<VodCategory> {
+        val arr = call("type=$type&action=get_categories").optJSONArray("js") ?: return emptyList()
+        val out = ArrayList<VodCategory>()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val id = o.optString("id")
+            if (id.isEmpty()) continue
+            val title = o.optString("title").ifBlank { o.optString("alias") }
+            out.add(VodCategory(id, if (id == "*") "All" else title))
+        }
+        return out
+    }
+
+    fun vodPage(type: String, category: String, page: Int): VodPage {
+        val js = call(
+            "type=$type&action=get_ordered_list&category=${URLEncoder.encode(category, "UTF-8")}" +
+                "&genre=${URLEncoder.encode(category, "UTF-8")}&p=$page&sortby=added&fav=0&hd=0&not_ended=0",
+        ).optJSONObject("js") ?: return VodPage(emptyList(), 0)
+        val total = js.optInt("total_items", 0)
+        val perPage = js.optInt("max_page_items", 14).coerceAtLeast(1)
+        val data = js.optJSONArray("data") ?: JSONArray()
+        val items = ArrayList<VodItem>()
+        for (i in 0 until data.length()) {
+            val o = data.optJSONObject(i) ?: continue
+            items.add(vodItem(o, type))
+        }
+        return VodPage(items, (total + perPage - 1) / perPage)
+    }
+
+    private fun vodItem(o: JSONObject, type: String): VodItem {
+        val seriesArr = o.optJSONArray("series")
+        val nums = ArrayList<Int>()
+        if (seriesArr != null) for (i in 0 until seriesArr.length()) seriesArr.optString(i).toIntOrNull()?.let { nums.add(it) }
+        val isSeries = type == "series" || o.optString("is_series") == "1" || nums.isNotEmpty()
+        val poster = o.optString("screenshot_uri").ifBlank { o.optString("pic") }.ifBlank { o.optString("cover_big") }
+        val minutes = o.optString("time").toIntOrNull() ?: 0
+        return VodItem(
+            id = o.optString("id"),
+            title = o.optString("name").ifBlank { o.optString("o_name") },
+            poster = logoUrl(poster),
+            description = o.optString("description").takeIf { it.isNotBlank() && it != "null" },
+            year = o.optString("year").takeIf { it.isNotBlank() && it != "null" && it != "N/A" },
+            rating = (o.optString("rating_imdb").takeIf { it.isNotBlank() && it != "null" && it != "0" && it != "N/A" }
+                ?: o.optString("rating_kinopoisk").takeIf { it.isNotBlank() && it != "null" && it != "0" }),
+            genre = o.optString("genres_str").takeIf { it.isNotBlank() && it != "null" },
+            minutes = minutes,
+            isSeries = isSeries,
+            cmd = o.optString("cmd").takeIf { it.isNotBlank() },
+            episodeNumbers = nums,
+            sourceType = type,
+        )
+    }
+
+    fun seasons(item: VodItem): List<Season> {
+        // Old style: the item itself lists its episode numbers.
+        if (item.episodeNumbers.isNotEmpty() && item.cmd != null) {
+            return listOf(Season("1", "Episodes", item.cmd, item.episodeNumbers))
+        }
+        val js = call("type=${item.sourceType}&action=get_ordered_list&movie_id=${enc(item.id)}&season_id=0&episode_id=0&p=1")
+            .optJSONObject("js") ?: return emptyList()
+        val data = js.optJSONArray("data") ?: return emptyList()
+        val out = ArrayList<Season>()
+        for (i in 0 until data.length()) {
+            val o = data.optJSONObject(i) ?: continue
+            val nums = ArrayList<Int>()
+            o.optJSONArray("series")?.let { a -> for (k in 0 until a.length()) a.optString(k).toIntOrNull()?.let { nums.add(it) } }
+            out.add(Season(o.optString("id"), o.optString("name").ifBlank { "Season ${i + 1}" }, o.optString("cmd").takeIf { it.isNotBlank() }, nums))
+        }
+        return out
+    }
+
+    fun episodes(item: VodItem, season: Season): List<Episode> {
+        if (season.episodeNumbers.isNotEmpty() && season.cmd != null) {
+            return season.episodeNumbers.map { Episode("${item.id}:${season.id}:$it", "Episode $it", season.cmd, it) }
+        }
+        val out = ArrayList<Episode>()
+        var page = 1
+        var pages = 1
+        while (page <= pages && page <= 30) {
+            val js = call(
+                "type=${item.sourceType}&action=get_ordered_list&movie_id=${enc(item.id)}&season_id=${enc(season.id)}&episode_id=0&p=$page",
+            ).optJSONObject("js") ?: break
+            val per = js.optInt("max_page_items", 14).coerceAtLeast(1)
+            pages = (js.optInt("total_items", 0) + per - 1) / per
+            val data = js.optJSONArray("data") ?: break
+            for (i in 0 until data.length()) {
+                val o = data.optJSONObject(i) ?: continue
+                val cmd = o.optString("cmd").takeIf { it.isNotBlank() } ?: continue
+                val num = o.optString("series_number").toIntOrNull()
+                out.add(Episode(o.optString("id"), o.optString("name").ifBlank { "Episode ${num ?: (out.size + 1)}" }, cmd, num))
+            }
+            page++
+        }
+        return out
+    }
+
+    /** Fresh playable link for a movie, or for one episode of a series. */
+    fun vodLink(cmd: String, series: Int?): String? {
+        val js = call(
+            "type=vod&action=create_link&cmd=${enc(cmd)}&series=${series ?: ""}&forced_storage=&disable_ad=0" +
+                "&download=0&force_ch_link_check=0",
+        ).optJSONObject("js")
+        return extractUrl(js?.optString("cmd").orEmpty()) ?: extractUrl(cmd)?.takeIf { !it.contains("localhost") }
+    }
+
+    private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
+
     fun subscriptionEnd(): String? {
         val js = call("type=account_info&action=get_main_info").optJSONObject("js") ?: return null
         return js.optString("end_date").takeIf { it.isNotBlank() && it != "null" }

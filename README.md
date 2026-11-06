@@ -11,7 +11,7 @@ A lightweight Android TV app for M3U playlists with XMLTV guide data. It is buil
 - Live playback (Media3/ExoPlayer) for HLS and MPEG-TS, with automatic reconnects.
 - Categories, a ★ Favorites list, and channel numbers. Numbers only cover visible channels, so they stay small.
 - TV guide grid. Past programmes can be replayed when the provider supports catch-up (`default`, `append`, `shift`, `flussonic`, `xc`).
-- Movies and series as their own categories, with seeking.
+- **Movies & Series (TiviMate-style)**: poster grids by category, a details page (rating, year, runtime, plot), seasons and episodes, **Continue watching**, and resume from where you stopped. Works with portals and with M3U playlists that include VOD. Open it from the channel list: 🎬 Movies / 📺 Series.
 - The playlist and guide are cached on the device and refreshed every 12 hours.
 
 ## Remote controls

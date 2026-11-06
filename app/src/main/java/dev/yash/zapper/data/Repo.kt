@@ -25,6 +25,8 @@ object Repo {
 
     private val favorites = ArrayList<String>()
 
+    fun store(): SharedPreferences = prefs
+
     fun init(ctx: Context) {
         if (::prefs.isInitialized) return
         prefs = ctx.getSharedPreferences("zapper", Context.MODE_PRIVATE)
@@ -134,21 +136,24 @@ object Repo {
         val out = ArrayList<Group>()
         out.add(Group("★ Favorites", favorites.mapNotNull { byUrl[it] }, Group.Kind.FAVORITES))
         out.add(Group("All channels", live, Group.Kind.ALL))
+        val hasVod = isPortal || all.any { it.isVod }
+        if (hasVod && !hideVod) {
+            out.add(Group("🎬 Movies", emptyList(), Group.Kind.MOVIES))
+            out.add(Group("📺 Series", emptyList(), Group.Kind.SERIES))
+        }
         val liveGroups = LinkedHashMap<String, ArrayList<Channel>>()
-        val vodGroups = LinkedHashMap<String, ArrayList<Channel>>()
         for (c in all) {
-            if (c.group in hidden || (c.isVod && hideVod)) continue
-            (if (c.isVod) vodGroups else liveGroups).getOrPut(c.group) { ArrayList() }.add(c)
+            if (c.isVod || c.group in hidden) continue
+            liveGroups.getOrPut(c.group) { ArrayList() }.add(c)
         }
         for ((k, v) in liveGroups) out.add(Group(k, v, Group.Kind.LIVE))
-        for ((k, v) in vodGroups) out.add(Group("▶ $k", v, Group.Kind.VOD))
         return out
     }
 
     /** All group names in the playlist with channel counts (for the phone settings page). */
     fun allGroupNames(): List<Pair<String, Int>> {
         val m = LinkedHashMap<String, Int>()
-        for (c in channels) m[c.group] = (m[c.group] ?: 0) + 1
+        for (c in channels) if (!c.isVod) m[c.group] = (m[c.group] ?: 0) + 1
         return m.toList()
     }
 
@@ -224,6 +229,20 @@ object Repo {
         val cmd = ch.cmd ?: return ch.url
         val c = stalker ?: return null
         return try { c.createLink(cmd) } catch (_: Exception) { null }
+    }
+
+    /** Movies & series for the current source, or null if there are none. */
+    fun vod(): VodSource? {
+        if (isPortal) return stalker?.let { PortalVod(it) }
+        val all = channels
+        return if (all.any { it.isVod }) M3uVod(all) else null
+    }
+
+    /** Stream URL for a movie/episode. Background thread only. */
+    fun vodLink(r: PlayRequest): String? {
+        if (r.direct) return r.cmd
+        val c = stalker ?: return null
+        return try { PortalVod.link(c, r) } catch (_: Exception) { null }
     }
 
     fun keepAlive() {
