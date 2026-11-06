@@ -25,7 +25,8 @@ class GroupAdapter : BaseAdapter() {
         val v = convertView ?: LayoutInflater.from(parent.context).inflate(R.layout.item_group, parent, false)
         val g = items[position]
         v.findViewById<TextView>(R.id.groupName).text = g.title
-        v.findViewById<TextView>(R.id.groupCount).text = g.channels.size.toString()
+        v.findViewById<TextView>(R.id.groupCount).text =
+            if (g.kind == Group.Kind.MOVIES || g.kind == Group.Kind.SERIES) "OK ›" else g.channels.size.toString()
         return v
     }
 }

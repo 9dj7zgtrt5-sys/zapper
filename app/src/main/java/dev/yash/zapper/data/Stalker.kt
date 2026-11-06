@@ -195,6 +195,20 @@ class StalkerClient(
             lines.add("✓ Signed in as ${variant.model} via ${api?.substringAfter("://")?.substringAfter('/')}")
             val n = try { channels().size } catch (e: Exception) { lines.add("✗ Channel list failed: ${e.message}"); -1 }
             if (n >= 0) lines.add("✓ $n channels")
+            for ((type, label) in listOf("vod" to "Movies", "series" to "Series")) {
+                try {
+                    val cats = vodCategories(type)
+                    lines.add("✓ $label: ${cats.size} categories")
+                    val first = cats.firstOrNull()
+                    if (first != null) {
+                        val p = vodPage(type, first.id, 1)
+                        lines.add("   '${first.title}': ${p.items.size} items on page 1 of ${p.pages}" +
+                            (p.items.firstOrNull()?.let { " — e.g. ${it.title}" } ?: ""))
+                    }
+                } catch (e: Exception) {
+                    lines.add("✗ $label: ${e.message ?: e.javaClass.simpleName}")
+                }
+            }
         } catch (e: Exception) {
             lines.add("✗ ${e.message ?: e.javaClass.simpleName}")
         } finally {

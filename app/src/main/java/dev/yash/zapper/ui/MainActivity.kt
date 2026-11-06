@@ -148,9 +148,32 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         if (pendingGroup != browseGroup || channelAdapter.items !== groups.getOrNull(pendingGroup)?.channels) {
             browseGroup = pendingGroup
             channelAdapter.items = groups.getOrNull(browseGroup)?.channels ?: emptyList()
+            updateEmptyHint()
             val idx = channelAdapter.items.indexOfFirst { it.url == current?.url }
             channelsList.setSelection(if (idx >= 0) idx else 0)
         }
+    }
+
+    private fun updateEmptyHint() {
+        val g = groups.getOrNull(browseGroup)
+        val empty = findViewById<TextView>(R.id.channelsEmpty)
+        val text = when {
+            g == null -> ""
+            g.kind == Group.Kind.MOVIES -> "🎬\n\nPress OK to open Movies"
+            g.kind == Group.Kind.SERIES -> "📺\n\nPress OK to open Series"
+            g.kind == Group.Kind.FAVORITES && g.channels.isEmpty() -> "No favorites yet.\n\nPick a channel in another category\nand press ☰ to add it here."
+            g.channels.isEmpty() -> "No channels here."
+            else -> ""
+        }
+        empty.text = text
+        empty.visibility = if (text.isEmpty()) View.GONE else View.VISIBLE
+    }
+
+    private fun openVodFor(g: Group?): Boolean {
+        if (g?.kind != Group.Kind.MOVIES && g?.kind != Group.Kind.SERIES) return false
+        hideOverlays()
+        startActivity(Intent(this, VodActivity::class.java).putExtra(VodActivity.EXTRA_SERIES, g.kind == Group.Kind.SERIES))
+        return true
     }
 
     // ---------------- lifecycle ----------------
@@ -466,6 +489,7 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         pendingGroup = gi
         groupAdapter.items = groups
         channelAdapter.items = groups.getOrNull(gi)?.channels ?: emptyList()
+        updateEmptyHint()
         groupsList.setSelection(gi)
         val idx = channelAdapter.items.indexOfFirst { it.url == current?.url }
         channelsList.setSelection(idx.coerceAtLeast(0))
@@ -607,6 +631,8 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         when (mode) {
             Mode.LIST -> {
+                if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && groupsList.hasFocus() &&
+                    openVodFor(groups.getOrNull(groupsList.selectedItemPosition))) return true
                 if (keyCode == KeyEvent.KEYCODE_MENU) {
                     if (event.repeatCount == 0 && channelsList.hasFocus()) {
                         (channelsList.selectedItem as? Channel)?.let { if (!it.isVod) toggleFavorite(it) }

@@ -143,16 +143,32 @@
                 android:paddingBottom="20dp"
                 android:scrollbars="none" />
 
-            <ListView
-                android:id="@+id/channelsList"
+            <FrameLayout
                 android:layout_width="590dp"
-                android:layout_height="match_parent"
-                android:clipToPadding="false"
-                android:divider="@null"
-                android:listSelector="@drawable/list_selector"
-                android:paddingTop="20dp"
-                android:paddingBottom="20dp"
-                android:scrollbars="none" />
+                android:layout_height="match_parent">
+
+                <ListView
+                    android:id="@+id/channelsList"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clipToPadding="false"
+                    android:divider="@null"
+                    android:listSelector="@drawable/list_selector"
+                    android:paddingTop="20dp"
+                    android:paddingBottom="20dp"
+                    android:scrollbars="none" />
+
+                <TextView
+                    android:id="@+id/channelsEmpty"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:lineSpacingExtra="8dp"
+                    android:padding="40dp"
+                    android:textColor="#C8CCD0"
+                    android:textSize="24sp"
+                    android:visibility="gone" />
+            </FrameLayout>
         </LinearLayout>
 
         <TextView

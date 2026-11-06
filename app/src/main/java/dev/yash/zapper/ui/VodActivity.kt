@@ -138,9 +138,10 @@ class VodActivity : Activity() {
         }
         showLoading(true)
         VodSession.exec.execute {
-            val cats = try { src.categories(series) } catch (_: Exception) { null }
-            val noSeriesSection = series && !src.hasSeriesSection
-            main.post { onCategories(cats, noSeriesSection) }
+            var err: String? = null
+            val cats = try { src.categories(series) } catch (e: Exception) { err = e.message ?: e.javaClass.simpleName; null }
+            val noSeriesSection = cats != null && series && !src.hasSeriesSection
+            main.post { onCategories(cats, noSeriesSection, err) }
         }
     }
 
@@ -156,9 +157,9 @@ class VodActivity : Activity() {
 
     private fun continueItems() = ResumeStore.asItems()
 
-    private fun onCategories(cats: List<VodCategory>?, noSeriesSection: Boolean) {
+    private fun onCategories(cats: List<VodCategory>?, noSeriesSection: Boolean, err: String? = null) {
         showLoading(false)
-        if (cats == null) { showEmpty("Couldn't load the list.\nCheck the internet and VPN, then try again."); return }
+        if (cats == null) { showEmpty("Couldn't load the list.\nCheck the internet and VPN, then try again.\n\n(${err ?: "unknown error"})"); return }
         if (noSeriesSection) { showEmpty("On this service, series are listed under Movies."); return }
         val list = ArrayList<VodCategory>()
         if (ResumeStore.all().isNotEmpty()) list.add(VodCategory(CONTINUE, "▶ Continue watching"))
@@ -201,13 +202,14 @@ class VodActivity : Activity() {
         val next = page + 1
         if (posters.count == 0) showLoading(true)
         VodSession.exec.execute {
-            val result = try { src.page(series, cat, next) } catch (_: Exception) { null }
+            var err: String? = null
+            val result = try { src.page(series, cat, next) } catch (e: Exception) { err = e.message; null }
             main.post {
                 if (gen != generation) return@post
                 busy = false
                 showLoading(false)
                 if (result == null) {
-                    if (posters.count == 0) showEmpty("Couldn't load this category.")
+                    if (posters.count == 0) showEmpty("Couldn't load this category.\n\n(${err ?: "unknown error"})")
                     pages = page
                     return@post
                 }
