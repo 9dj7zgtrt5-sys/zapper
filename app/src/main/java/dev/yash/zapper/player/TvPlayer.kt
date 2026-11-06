@@ -3,6 +3,7 @@ package dev.yash.zapper.player
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
@@ -60,7 +61,10 @@ class TvPlayer(private val ctx: Context, view: PlayerView, private val cb: Callb
                         forceHls = true
                         start(0)
                     }
-                    else -> retry(error.errorCodeName)
+                    else -> {
+                        Log.w("Zapper", "Playback error ${error.errorCodeName} url=$url", error)
+                        retry(error.errorCodeName)
+                    }
                 }
             }
         })
@@ -101,10 +105,10 @@ class TvPlayer(private val ctx: Context, view: PlayerView, private val cb: Callb
         if (r == null) { startWith(url ?: return, positionMs); return }
         val gen = ++generation
         bg.execute {
-            val resolved = try { r() } catch (_: Exception) { null }
+            val resolved = try { r() } catch (e: Exception) { Log.w("Zapper", "Link failed", e); null }
             handler.post {
                 if (gen != generation) return@post
-                if (resolved == null) retry("no link") else {
+                if (resolved == null) { Log.w("Zapper", "No stream link from portal"); retry("no link") } else {
                     url = resolved
                     if (!forceHls) forceHls = resolved.substringBefore('?').endsWith(".m3u8", ignoreCase = true)
                     startWith(resolved, positionMs)

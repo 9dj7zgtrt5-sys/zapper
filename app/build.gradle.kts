@@ -13,8 +13,8 @@ android {
         // Kept at 28: Fire OS is Android 7-11 based, and this keeps auto-launch on wake working
         // without the extra background restrictions newer targets bring.
         targetSdk = 28
-        versionCode = 16
-        versionName = "3.2"
+        versionCode = 17
+        versionName = "3.3"
     }
 
     // One fixed key for every build, so new versions install over old ones (Android rejects

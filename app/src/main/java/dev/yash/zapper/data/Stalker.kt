@@ -193,8 +193,11 @@ class StalkerClient(
         try {
             connect()
             lines.add("✓ Signed in as ${variant.model} via ${api?.substringAfter("://")?.substringAfter('/')}")
-            val n = try { channels().size } catch (e: Exception) { lines.add("✗ Channel list failed: ${e.message}"); -1 }
-            if (n >= 0) lines.add("✓ $n channels")
+            val chans = try { channels() } catch (e: Exception) { lines.add("✗ Channel list failed: ${e.message}"); null }
+            if (chans != null) {
+                lines.add("✓ ${chans.size} channels")
+                chans.take(2).forEach { ch -> lines.add(streamTest(ch)) }
+            }
             for ((type, label) in listOf("vod" to "Movies", "series" to "Series")) {
                 try {
                     val cats = vodCategories(type)
@@ -215,6 +218,39 @@ class StalkerClient(
             log = null
         }
         return lines
+    }
+
+    /** Gets a link for one channel and checks the video server answers, like the player would. */
+    private fun streamTest(ch: Channel): String {
+        val link = try { createLink(ch.cmd ?: "") } catch (e: Exception) {
+            return "✗ '${ch.name}': no link from portal (${e.message ?: e.javaClass.simpleName})"
+        } ?: return "✗ '${ch.name}': portal gave no stream link"
+        val host = try { URL(link).host } catch (_: Exception) { "?" }
+        return try {
+            var current = URL(link)
+            var code = 0
+            var type = ""
+            for (i in 0 until 6) {
+                val c = current.openConnection() as HttpURLConnection
+                c.instanceFollowRedirects = false
+                c.connectTimeout = 10_000
+                c.readTimeout = 15_000
+                c.setRequestProperty("User-Agent", UA)
+                code = c.responseCode
+                type = c.contentType ?: ""
+                val loc = c.getHeaderField("Location")
+                if (code in 200..299) {
+                    val n = try { c.inputStream.use { s -> val b = ByteArray(65536); var t = 0; while (t < 65536) { val r = s.read(b, t, 65536 - t); if (r < 0) break; t += r }; t } } catch (_: Exception) { -1 }
+                    c.disconnect()
+                    return "✓ '${ch.name}': video server $host answered $code ($type), read $n bytes"
+                }
+                c.disconnect()
+                if (code in 300..399 && loc != null) current = URL(current, loc) else break
+            }
+            "✗ '${ch.name}': video server $host answered HTTP $code"
+        } catch (e: Exception) {
+            "✗ '${ch.name}': video server $host unreachable (${e.javaClass.simpleName}: ${e.message})"
+        }
     }
 
     private fun snippet(body: String): String {
