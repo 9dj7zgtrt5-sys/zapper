@@ -72,8 +72,11 @@ object ConfigServer {
             } else ""
 
             val html = if (method == "POST" && path.startsWith("/save")) {
-                save(parseForm(body))
-                page("<h2>Saved ✓</h2><p>The TV has the new settings.</p><p><a href='/'>Back to settings</a></p>")
+                val form = parseForm(body)
+                save(form)
+                if (form.any { it.first == "newmac" })
+                    page("<h2>New MAC created ✓</h2><p style='font-size:22px'><b>${esc(Repo.mac)}</b></p><p>Send this to your provider to activate it.</p><p><a href='/'>Back to settings</a></p>")
+                else page("<h2>Saved ✓</h2><p>The TV has the new settings.</p><p><a href='/'>Back to settings</a></p>")
             } else form()
 
             val bytes = html.toByteArray(Charsets.UTF_8)
@@ -89,6 +92,7 @@ object ConfigServer {
 
     private fun save(f: List<Pair<String, String>>) {
         fun v(k: String) = f.firstOrNull { it.first == k }?.second
+
         fun on(k: String) = v(k) == "on"
         val hidden = if (v("groups_present") != null) {
             val shown = f.filter { it.first == "g" }.map { it.second }.toSet()
@@ -112,6 +116,7 @@ object ConfigServer {
                 forceReload = v("reload") != null,
             )
         )
+        if (v("newmac") != null) Repo.regenerateMac()
         Repo.main.post { listener?.invoke() }
     }
 
@@ -159,6 +164,7 @@ object ConfigServer {
             <div class="status">
               <div>Channels: <b>${Repo.channels.count { !it.isVod }}</b> live · <b>${Repo.channels.count { it.isVod }}</b> movies/episodes</div>
               <div>TV guide: <b>${Repo.epgChannelCount}</b> channels have programme info</div>
+              <div>This TV's MAC address: <b style="font-size:18px;letter-spacing:.03em">${esc(Repo.mac)}</b></div>
               <div>Source: <b>${if (Repo.isPortal) "Portal (MAC ${esc(Repo.mac)})" else "M3U playlist"}</b>${Repo.subscriptionEnd?.let { " · subscription until <b>" + esc(it) + "</b>" } ?: ""}</div>
               <div>VPN: <b>${if (vpnOn) "connected ✓" else if (vpnApps.isEmpty()) "no VPN app found" else "off"}</b></div>
             </div>
@@ -171,6 +177,8 @@ object ConfigServer {
                 <input name="portal" value="${esc(Repo.portalUrl)}" placeholder="http://server:port/c/" autocapitalize="off" autocorrect="off">
                 <label>MAC address <small>(the one your provider activated, e.g. 00:1A:79:12:34:56)</small></label>
                 <input name="mac" value="${esc(Repo.mac)}" placeholder="00:1A:79:XX:XX:XX" autocapitalize="characters" autocorrect="off">
+                <p class="muted">Zapper made this MAC for this TV. Give it to your provider to activate, or type the one they gave you.</p>
+                <button type="submit" name="newmac" value="1" class="secondary" style="margin-top:4px" onclick="return confirm('Create a new MAC address? Your provider will need to activate the new one.')">Generate new MAC</button>
               </div>
               <div id="m3uBox">
                 <label>M3U playlist URL</label>

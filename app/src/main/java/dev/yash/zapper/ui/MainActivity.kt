@@ -495,6 +495,8 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
     private fun showHelp() {
         hideOverlays()
         infoBar.visibility = View.GONE
+        findViewById<TextView>(R.id.helpMac).text = "This TV's MAC address:  ${Repo.mac}" +
+            (ConfigServer.address()?.let { "      Settings from a phone:  $it" } ?: "")
         help.visibility = View.VISIBLE
     }
 
@@ -502,8 +504,9 @@ class MainActivity : Activity(), TvPlayer.Callback, GuideView.Listener {
         val addr = ConfigServer.address()
         showCard(
             Card.WELCOME, "Welcome to Zapper",
-            if (addr != null) "To add channels, open this address on a phone\nconnected to the same Wi-Fi:\n\n$addr\n\nor press OK to type it in with the remote."
-            else "Connect the TV to Wi-Fi, then press OK to set up.",
+            "This TV's MAC address:  ${Repo.mac}\n(give this to your IPTV provider)\n\n" +
+                (if (addr != null) "To add channels, open this address on a phone\nconnected to the same Wi-Fi:\n$addr\n\nor press OK to type it in with the remote."
+                else "Connect the TV to Wi-Fi, then press OK to set up."),
             button = "Set up here",
         ) { startActivity(Intent(this, SetupActivity::class.java)) }
     }

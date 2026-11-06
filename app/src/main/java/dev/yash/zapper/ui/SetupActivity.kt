@@ -42,7 +42,7 @@ class SetupActivity : Activity() {
         else "Connect the TV to Wi-Fi to set up from your phone."
 
         findViewById<Button>(R.id.saveButton).setOnClickListener {
-            val usePortal = portal.text.isNotBlank() || mac.text.isNotBlank()
+            val usePortal = portal.text.isNotBlank()
             if (usePortal && !StalkerClient.isValidMac(mac.text.toString())) {
                 Toast.makeText(this, "Enter the MAC like 00:1A:79:12:34:56", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
@@ -52,7 +52,7 @@ class SetupActivity : Activity() {
                 return@setOnClickListener
             }
             if (!usePortal && m3u.text.isBlank()) {
-                Toast.makeText(this, "Enter a portal + MAC, or a playlist URL", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Enter a portal URL, or a playlist URL", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             Repo.saveConfig(
@@ -72,6 +72,10 @@ class SetupActivity : Activity() {
             finish()
         }
         findViewById<Button>(R.id.cancelButton).setOnClickListener { finish() }
+        findViewById<Button>(R.id.newMacButton).setOnClickListener {
+            mac.setText(Repo.generateMac())
+            Toast.makeText(this, "New MAC created. Press Save, then give it to your provider.", Toast.LENGTH_LONG).show()
+        }
         findViewById<Button>(R.id.saveButton).requestFocus()
     }
 

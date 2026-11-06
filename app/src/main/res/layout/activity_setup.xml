@@ -28,7 +28,26 @@
             <EditText android:id="@+id/portalUrl" style="@style/Field" android:inputType="textUri" />
 
             <TextView style="@style/Label" android:text="MAC address (e.g. 00:1A:79:12:34:56)" />
-            <EditText android:id="@+id/macAddress" style="@style/Field" android:inputType="textCapCharacters" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/macAddress"
+                    style="@style/Field"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:inputType="textCapCharacters" />
+
+                <Button
+                    android:id="@+id/newMacButton"
+                    style="@style/TvButton"
+                    android:layout_marginStart="12dp"
+                    android:layout_marginTop="6dp"
+                    android:text="Generate new MAC" />
+            </LinearLayout>
 
             <TextView style="@style/Label" android:text="Or: M3U playlist URL" />
             <EditText android:id="@+id/m3uUrl" style="@style/Field" android:inputType="textUri" />

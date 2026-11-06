@@ -41,9 +41,33 @@ object Repo {
     val source: String get() = prefs.getString("source", "m3u")!!
     val isPortal: Boolean get() = source == "portal"
     val portalUrl: String get() = prefs.getString("portal", "")!!
-    val mac: String get() = prefs.getString("mac", "")!!
+    /** MAC used with the portal: the one entered in settings, else this TV's own generated MAC. */
+    val mac: String get() = prefs.getString("mac", "")!!.ifBlank { deviceMac }
     val isConfigured: Boolean
-        get() = if (isPortal) portalUrl.isNotBlank() && mac.isNotBlank() else m3uUrl.isNotBlank()
+        get() = if (isPortal) portalUrl.isNotBlank() else m3uUrl.isNotBlank()
+
+    /** A MAG-style MAC (00:1A:79:xx:xx:xx) created once for this TV, to give to the provider. */
+    val deviceMac: String
+        @Synchronized get() {
+            prefs.getString("devmac", null)?.let { return it }
+            val m = generateMac()
+            prefs.edit().putString("devmac", m).commit()
+            return m
+        }
+
+    fun generateMac(): String {
+        val b = ByteArray(3)
+        java.security.SecureRandom().nextBytes(b)
+        return "00:1A:79:" + b.joinToString(":") { "%02X".format(it) }
+    }
+
+    /** Replaces this TV's MAC with a new random one and starts using it. */
+    @Synchronized
+    fun regenerateMac(): String {
+        val m = generateMac()
+        prefs.edit().putString("devmac", m).putString("mac", m).putInt("cfgver", configVersion + 1).commit()
+        return m
+    }
     val epgUrl: String get() = prefs.getString("epg", "")!!
     val userAgent: String get() = prefs.getString("ua", "")!!.ifBlank { DEFAULT_UA }
     val customUserAgent: String get() = prefs.getString("ua", "")!!
@@ -208,7 +232,7 @@ object Repo {
     val linkExec = Executors.newSingleThreadExecutor()
 
     private fun loadPortal(): String? {
-        if (portalUrl.isBlank() || mac.isBlank()) return "Portal URL or MAC address missing"
+        if (portalUrl.isBlank()) return "Portal URL missing"
         return try {
             val c = StalkerClient(portalUrl, mac)
             val list = c.channels()
